@@ -29,11 +29,10 @@ include = [
 
 [dependencies]
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19"}
-serde_json = "1.0.140"
 serde = { version = "1.0.219", features = ["derive"] }
-crossbeam = "0.8.4"
 uuid = { version = "1.16.0", features = ["v4", "v5", "serde"] }
+pricelevel = { git = "https://github.com/joaquinbejar/PriceLevel.git", branch = "main" }
+dashmap = "6.1.0"
 
 
 [dev-dependencies]
@@ -49,7 +48,7 @@ path = "benches/mod.rs"
 harness = false
 
 [lib]
-name = "pricelevel"
+name = "orderbook_rs"
 path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 

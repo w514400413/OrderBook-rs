@@ -35,3 +35,10 @@
 //! ## Status
 //!
 //! This project is currently in active development and is not yet suitable for production use.
+
+mod orderbook;
+
+mod utils;
+
+pub use orderbook::{OrderBook, OrderBookError, OrderBookSnapshot};
+pub use utils::current_time_millis;

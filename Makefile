@@ -1,7 +1,7 @@
 # Makefile for common tasks in a Rust project
 # Detect current branch
 CURRENT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
-ZIP_NAME = PriceLevel.zip
+ZIP_NAME = OrderBook-rs.zip
 
 
 # Default target
