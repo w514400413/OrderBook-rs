@@ -300,6 +300,10 @@ impl OrderBook {
                 requested: quantity,
                 available: 0,
             })
+        } else if !match_result.is_complete && remaining_quantity > 0 {
+            // If the order was partially executed, you should still return Ok with the match_result
+            // but make sure the tests reflect this expected behavior
+            Ok(match_result)
         } else {
             Ok(match_result)
         }

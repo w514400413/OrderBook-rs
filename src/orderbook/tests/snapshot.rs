@@ -575,3 +575,135 @@ mod tests_bis {
         );
     }
 }
+
+#[cfg(test)]
+mod test_orderbook_snapshot {
+    use crate::OrderBookSnapshot;
+    use pricelevel::PriceLevelSnapshot;
+
+    #[test]
+    fn test_snapshot_methods() {
+        // Create a snapshot with bid levels
+        let bid1 = PriceLevelSnapshot {
+            price: 1000,
+            visible_quantity: 10,
+            hidden_quantity: 5,
+            order_count: 2,
+            orders: Vec::new(),
+        };
+
+        let bid2 = PriceLevelSnapshot {
+            price: 990,
+            visible_quantity: 20,
+            hidden_quantity: 0,
+            order_count: 1,
+            orders: Vec::new(),
+        };
+
+        // Create ask levels
+        let ask1 = PriceLevelSnapshot {
+            price: 1010,
+            visible_quantity: 15,
+            hidden_quantity: 0,
+            order_count: 3,
+            orders: Vec::new(),
+        };
+
+        let ask2 = PriceLevelSnapshot {
+            price: 1020,
+            visible_quantity: 25,
+            hidden_quantity: 10,
+            order_count: 2,
+            orders: Vec::new(),
+        };
+
+        let snapshot = OrderBookSnapshot {
+            symbol: "TEST".to_string(),
+            timestamp: 12345678,
+            bids: vec![bid1, bid2],
+            asks: vec![ask1, ask2],
+        };
+
+        // Test total_bid_volume
+        assert_eq!(snapshot.total_bid_volume(), 35); // 10 + 5 + 20
+
+        // Test total_ask_volume
+        assert_eq!(snapshot.total_ask_volume(), 50); // 15 + 25 + 10
+
+        // Test total_bid_value
+        assert_eq!(snapshot.total_bid_value(), 1000 * 15 + 990 * 20);
+
+        // Test total_ask_value
+        assert_eq!(snapshot.total_ask_value(), 1010 * 15 + 1020 * 35);
+    }
+}
+
+#[cfg(test)]
+mod test_snapshot_remaining {
+    use crate::OrderBookSnapshot;
+    use pricelevel::PriceLevelSnapshot;
+
+    #[test]
+    fn test_empty_snapshot_volume_methods() {
+        let empty_snapshot = OrderBookSnapshot {
+            symbol: "TEST".to_string(),
+            timestamp: 12345678,
+            bids: Vec::new(),
+            asks: Vec::new(),
+        };
+
+        // Test volume methods on empty snapshot
+        assert_eq!(empty_snapshot.total_bid_volume(), 0);
+        assert_eq!(empty_snapshot.total_ask_volume(), 0);
+        assert_eq!(empty_snapshot.total_bid_value(), 0);
+        assert_eq!(empty_snapshot.total_ask_value(), 0);
+    }
+
+    #[test]
+    fn test_snapshot_tracing() {
+        // Create a snapshot with a bid level
+        let bid = PriceLevelSnapshot {
+            price: 1000,
+            visible_quantity: 10,
+            hidden_quantity: 5,
+            order_count: 2,
+            orders: Vec::new(),
+        };
+
+        // Create an ask level
+        let ask = PriceLevelSnapshot {
+            price: 1010,
+            visible_quantity: 15,
+            hidden_quantity: 0,
+            order_count: 3,
+            orders: Vec::new(),
+        };
+
+        let snapshot = OrderBookSnapshot {
+            symbol: "TEST".to_string(),
+            timestamp: 12345678,
+            bids: vec![bid],
+            asks: vec![ask],
+        };
+
+        // Test methods that involve tracing
+        let best_bid = snapshot.best_bid();
+        let best_ask = snapshot.best_ask();
+        let mid_price = snapshot.mid_price();
+        let spread = snapshot.spread();
+        let total_bid_volume = snapshot.total_bid_volume();
+        let total_ask_volume = snapshot.total_ask_volume();
+        let total_bid_value = snapshot.total_bid_value();
+        let total_ask_value = snapshot.total_ask_value();
+
+        // Verify results
+        assert_eq!(best_bid, Some((1000, 10)));
+        assert_eq!(best_ask, Some((1010, 15)));
+        assert_eq!(mid_price, Some(1005.0));
+        assert_eq!(spread, Some(10));
+        assert_eq!(total_bid_volume, 15);
+        assert_eq!(total_ask_volume, 15);
+        assert_eq!(total_bid_value, 15000);
+        assert_eq!(total_ask_value, 15150);
+    }
+}

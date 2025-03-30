@@ -559,3 +559,280 @@ mod tests {
         book.clear_market_close_timestamp();
     }
 }
+
+#[cfg(test)]
+mod test_orderbook_book {
+    use crate::OrderBook;
+    use pricelevel::{OrderId, Side, TimeInForce};
+    use uuid::Uuid;
+
+    // Helper function to create a unique order ID
+    fn create_order_id() -> OrderId {
+        OrderId(Uuid::new_v4())
+    }
+
+    #[test]
+    fn test_market_close_timestamp() {
+        let book = OrderBook::new("TEST");
+
+        // Set market close timestamp
+        let close_time = crate::utils::current_time_millis() + 60000; // 1 minute in the future
+        book.set_market_close_timestamp(close_time);
+
+        // Add a standard limit order with DAY time-in-force
+        let id = create_order_id();
+        let result = book.add_limit_order(id, 1000, 10, Side::Buy, TimeInForce::Day);
+        assert!(result.is_ok());
+
+        // Order should be in the book
+        assert!(book.get_order(id).is_some());
+
+        // Clear market close timestamp
+        book.clear_market_close_timestamp();
+
+        // Update with a time past the original close
+        let past_close_time = close_time + 1000;
+        book.set_market_close_timestamp(past_close_time);
+
+        // Add another day order
+        let id2 = create_order_id();
+        let result = book.add_limit_order(id2, 1000, 10, Side::Buy, TimeInForce::Day);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_get_volume_by_price() {
+        let book = OrderBook::new("TEST");
+
+        // Add multiple orders at different price levels
+        let id1 = create_order_id();
+        let _ = book.add_limit_order(id1, 1000, 10, Side::Buy, TimeInForce::Gtc);
+
+        let id2 = create_order_id();
+        let _ = book.add_limit_order(id2, 1000, 15, Side::Buy, TimeInForce::Gtc); // Same price
+
+        let id3 = create_order_id();
+        let _ = book.add_limit_order(id3, 990, 20, Side::Buy, TimeInForce::Gtc); // Different price
+
+        let id4 = create_order_id();
+        let _ = book.add_limit_order(id4, 1010, 5, Side::Sell, TimeInForce::Gtc); // Sell side
+
+        let id5 = create_order_id();
+        let _ = book.add_limit_order(id5, 1010, 8, Side::Sell, TimeInForce::Gtc); // Same price
+
+        // Get volumes by price
+        let (bid_volumes, ask_volumes) = book.get_volume_by_price();
+
+        // Check bid volumes
+        assert_eq!(bid_volumes.len(), 2);
+        assert_eq!(bid_volumes.get(&1000), Some(&25)); // 10 + 15
+        assert_eq!(bid_volumes.get(&990), Some(&20));
+
+        // Check ask volumes
+        assert_eq!(ask_volumes.len(), 1);
+        assert_eq!(ask_volumes.get(&1010), Some(&13)); // 5 + 8
+    }
+
+    #[test]
+    fn test_snapshot_creation() {
+        let book = OrderBook::new("TEST");
+
+        // Add orders on both sides
+        let _ = book.add_limit_order(create_order_id(), 1000, 10, Side::Buy, TimeInForce::Gtc);
+        let _ = book.add_limit_order(create_order_id(), 990, 15, Side::Buy, TimeInForce::Gtc);
+        let _ = book.add_limit_order(create_order_id(), 980, 20, Side::Buy, TimeInForce::Gtc);
+
+        let _ = book.add_limit_order(create_order_id(), 1010, 5, Side::Sell, TimeInForce::Gtc);
+        let _ = book.add_limit_order(create_order_id(), 1020, 8, Side::Sell, TimeInForce::Gtc);
+        let _ = book.add_limit_order(create_order_id(), 1030, 12, Side::Sell, TimeInForce::Gtc);
+
+        // Create snapshot with limited depth
+        let snapshot = book.create_snapshot(2);
+
+        // Check snapshot properties
+        assert_eq!(snapshot.symbol, "TEST");
+        assert_eq!(snapshot.bids.len(), 2); // Limited to 2 levels
+        assert_eq!(snapshot.asks.len(), 2); // Limited to 2 levels
+
+        // Check prices are in correct order
+        assert_eq!(snapshot.bids[0].price, 1000); // Highest bid first
+        assert_eq!(snapshot.bids[1].price, 990); // Second highest
+
+        assert_eq!(snapshot.asks[0].price, 1010); // Lowest ask first
+        assert_eq!(snapshot.asks[1].price, 1020); // Second lowest
+
+        // Create a full depth snapshot
+        let full_snapshot = book.create_snapshot(10);
+        assert_eq!(full_snapshot.bids.len(), 3); // All 3 bid levels
+        assert_eq!(full_snapshot.asks.len(), 3); // All 3 ask levels
+    }
+
+    #[test]
+    fn test_mid_price_calculation() {
+        let book = OrderBook::new("TEST");
+
+        // Initially no orders, mid price should be None
+        assert_eq!(book.mid_price(), None);
+
+        // Add a bid only
+        let _ = book.add_limit_order(create_order_id(), 1000, 10, Side::Buy, TimeInForce::Gtc);
+        assert_eq!(book.mid_price(), None); // Still None with just bids
+
+        // Add an ask
+        let _ = book.add_limit_order(create_order_id(), 1040, 10, Side::Sell, TimeInForce::Gtc);
+        assert_eq!(book.mid_price(), Some(1020.0)); // Mid price is (1000 + 1040) / 2
+
+        // Add better bid and ask
+        let _ = book.add_limit_order(create_order_id(), 1010, 5, Side::Buy, TimeInForce::Gtc);
+        let _ = book.add_limit_order(create_order_id(), 1030, 5, Side::Sell, TimeInForce::Gtc);
+        assert_eq!(book.mid_price(), Some(1020.0)); // Mid price is (1010 + 1030) / 2
+    }
+
+    #[test]
+    fn test_spread_calculation() {
+        let book = OrderBook::new("TEST");
+
+        // Initially no orders, spread should be None
+        assert_eq!(book.spread(), None);
+
+        // Add a bid only
+        let _ = book.add_limit_order(create_order_id(), 1000, 10, Side::Buy, TimeInForce::Gtc);
+        assert_eq!(book.spread(), None); // Still None with just bids
+
+        // Add an ask
+        let _ = book.add_limit_order(create_order_id(), 1040, 10, Side::Sell, TimeInForce::Gtc);
+        assert_eq!(book.spread(), Some(40)); // Spread is 1040 - 1000
+
+        // Add better bid and ask
+        let _ = book.add_limit_order(create_order_id(), 1010, 5, Side::Buy, TimeInForce::Gtc);
+        let _ = book.add_limit_order(create_order_id(), 1030, 5, Side::Sell, TimeInForce::Gtc);
+        assert_eq!(book.spread(), Some(20)); // Spread is 1030 - 1010
+    }
+}
+
+#[cfg(test)]
+mod test_book_remaining {
+    use crate::OrderBook;
+    use pricelevel::{OrderId, Side, TimeInForce};
+    use uuid::Uuid;
+
+    fn create_order_id() -> OrderId {
+        OrderId(Uuid::new_v4())
+    }
+
+    #[test]
+    fn test_symbol_accessor() {
+        let symbol = "BTCUSD";
+        let book = OrderBook::new(symbol);
+
+        assert_eq!(book.symbol(), symbol);
+    }
+
+    #[test]
+    fn test_market_close_accessors() {
+        let book = OrderBook::new("TEST");
+
+        // Initially, market close is not set
+        assert!(
+            !book
+                .has_market_close
+                .load(std::sync::atomic::Ordering::Relaxed)
+        );
+
+        // Set market close timestamp
+        let timestamp = 12345678;
+        book.set_market_close_timestamp(timestamp);
+
+        // Verify it was set correctly
+        assert!(
+            book.has_market_close
+                .load(std::sync::atomic::Ordering::Relaxed)
+        );
+        assert_eq!(
+            book.market_close_timestamp
+                .load(std::sync::atomic::Ordering::Relaxed),
+            timestamp
+        );
+
+        // Clear market close timestamp
+        book.clear_market_close_timestamp();
+
+        // Verify it was cleared
+        assert!(
+            !book
+                .has_market_close
+                .load(std::sync::atomic::Ordering::Relaxed)
+        );
+    }
+
+    #[test]
+    fn test_best_bid_ask_with_multiple_levels() {
+        let book = OrderBook::new("TEST");
+
+        // Add multiple bids at different prices
+        let _ = book.add_limit_order(create_order_id(), 1000, 10, Side::Buy, TimeInForce::Gtc);
+        let _ = book.add_limit_order(create_order_id(), 990, 10, Side::Buy, TimeInForce::Gtc);
+        let _ = book.add_limit_order(create_order_id(), 1010, 10, Side::Buy, TimeInForce::Gtc);
+
+        // Add multiple asks at different prices
+        let _ = book.add_limit_order(create_order_id(), 1030, 10, Side::Sell, TimeInForce::Gtc);
+        let _ = book.add_limit_order(create_order_id(), 1020, 10, Side::Sell, TimeInForce::Gtc);
+        let _ = book.add_limit_order(create_order_id(), 1040, 10, Side::Sell, TimeInForce::Gtc);
+
+        // Test best bid and ask
+        assert_eq!(book.best_bid(), Some(1010));
+        assert_eq!(book.best_ask(), Some(1020));
+
+        // Test spread
+        assert_eq!(book.spread(), Some(10));
+
+        // Test mid price
+        assert_eq!(book.mid_price(), Some(1015.0));
+    }
+
+    #[test]
+    fn test_last_trade_price() {
+        let book = OrderBook::new("TEST");
+
+        // Initially, no trades
+        assert_eq!(book.last_trade_price(), None);
+
+        // Add a sell order
+        let sell_id = create_order_id();
+        let _ = book.add_limit_order(sell_id, 1000, 10, Side::Sell, TimeInForce::Gtc);
+
+        // Submit a market buy order
+        let buy_id = create_order_id();
+        let result = book.submit_market_order(buy_id, 5, Side::Buy);
+        assert!(result.is_ok());
+
+        // Last trade price should be set
+        assert_eq!(book.last_trade_price(), Some(1000));
+
+        // Submit another market order at a different price
+        let sell_id2 = create_order_id();
+        let _ = book.add_limit_order(sell_id2, 1010, 10, Side::Sell, TimeInForce::Gtc);
+
+        let buy_id2 = create_order_id();
+        let result = book.submit_market_order(buy_id2, 5, Side::Buy);
+        assert!(result.is_ok());
+
+        // Last trade price should be updated - but looking at the implementation, it will likely
+        // go through the first sell order first (at 1000) since it's the best price
+        assert_eq!(book.last_trade_price(), Some(1000));
+    }
+
+    #[test]
+    fn test_create_snapshot_empty_book() {
+        let book = OrderBook::new("TEST");
+
+        // Create a snapshot of an empty book
+        let snapshot = book.create_snapshot(10);
+
+        // Verify snapshot properties
+        assert_eq!(snapshot.symbol, "TEST");
+        assert_eq!(snapshot.bids.len(), 0);
+        assert_eq!(snapshot.asks.len(), 0);
+        assert!(snapshot.timestamp > 0);
+    }
+}
