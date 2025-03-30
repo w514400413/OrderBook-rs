@@ -25,8 +25,9 @@ impl OrderBookSnapshot {
     pub fn best_bid(&self) -> Option<(u64, u64)> {
         let bids = self
             .bids
-            .first()
-            .map(|level| (level.price, level.visible_quantity));
+            .iter()
+            .map(|level| (level.price, level.visible_quantity))
+            .max_by_key(|&(price, _)| price);
         trace!("best_bid: {:?}", bids);
         bids
     }
@@ -35,8 +36,9 @@ impl OrderBookSnapshot {
     pub fn best_ask(&self) -> Option<(u64, u64)> {
         let ask = self
             .asks
-            .first()
-            .map(|level| (level.price, level.visible_quantity));
+            .iter()
+            .map(|level| (level.price, level.visible_quantity))
+            .min_by_key(|&(price, _)| price);
         trace!("best_ask: {:?}", ask);
         ask
     }

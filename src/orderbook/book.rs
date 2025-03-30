@@ -4,7 +4,7 @@ use super::error::OrderBookError;
 use super::snapshot::OrderBookSnapshot;
 use crate::utils::current_time_millis;
 use dashmap::DashMap;
-use pricelevel::{MatchResult, OrderId, OrderType, OrderUpdate, PriceLevel, Side, UuidGenerator};
+use pricelevel::{MatchResult, OrderId, OrderType, PriceLevel, Side, UuidGenerator};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -15,34 +15,34 @@ use uuid::Uuid;
 /// It supports adding, cancelling, and matching orders with lock-free operations where possible.
 pub struct OrderBook {
     /// The symbol or identifier for this order book
-    symbol: String,
+    pub(super) symbol: String,
 
     /// Bid side price levels (buy orders), stored in a concurrent map for lock-free access
     /// The map is keyed by price levels and stores Arc references to PriceLevel instances
-    bids: DashMap<u64, Arc<PriceLevel>>,
+    pub(super) bids: DashMap<u64, Arc<PriceLevel>>,
 
     /// Ask side price levels (sell orders), stored in a concurrent map for lock-free access
     /// The map is keyed by price levels and stores Arc references to PriceLevel instances
-    asks: DashMap<u64, Arc<PriceLevel>>,
+    pub(super) asks: DashMap<u64, Arc<PriceLevel>>,
 
     /// A concurrent map from order ID to (price, side) for fast lookups
     /// This avoids having to search through all price levels to find an order
-    order_locations: DashMap<OrderId, (u64, Side)>,
+    pub(super) order_locations: DashMap<OrderId, (u64, Side)>,
 
     /// Generator for unique transaction IDs
     transaction_id_generator: UuidGenerator,
 
     /// The last price at which a trade occurred
-    last_trade_price: AtomicU64,
+    pub(super) last_trade_price: AtomicU64,
 
     /// Flag indicating if there was a trade
-    has_traded: AtomicBool,
+    pub(super) has_traded: AtomicBool,
 
     /// The timestamp of market close, if applicable (for DAY orders)
-    market_close_timestamp: AtomicU64,
+    pub(super) market_close_timestamp: AtomicU64,
 
     /// Flag indicating if market close is set
-    has_market_close: AtomicBool,
+    pub(super) has_market_close: AtomicBool,
 }
 
 impl OrderBook {
@@ -137,415 +137,6 @@ impl OrderBook {
         match (self.best_bid(), self.best_ask()) {
             (Some(bid), Some(ask)) => Some(ask.saturating_sub(bid)),
             _ => None,
-        }
-    }
-
-    /// Check if an order has expired
-    fn has_expired(&self, order: &OrderType) -> bool {
-        let time_in_force = order.time_in_force();
-        let current_time = current_time_millis();
-
-        // Only check market close timestamp if we have one set
-        let market_close = if self.has_market_close.load(Ordering::Relaxed) {
-            Some(self.market_close_timestamp.load(Ordering::Relaxed))
-        } else {
-            None
-        };
-
-        time_in_force.is_expired(current_time, market_close)
-    }
-
-    /// Check if there would be a price crossing
-    fn will_cross_market(&self, price: u64, side: Side) -> bool {
-        match side {
-            Side::Buy => {
-                if let Some(best_ask) = self.best_ask() {
-                    price >= best_ask
-                } else {
-                    false
-                }
-            }
-            Side::Sell => {
-                if let Some(best_bid) = self.best_bid() {
-                    price <= best_bid
-                } else {
-                    false
-                }
-            }
-        }
-    }
-
-    /// Add a new order to the book
-    pub fn add_order(&self, order: OrderType) -> Result<Arc<OrderType>, OrderBookError> {
-        trace!(
-            "Order book {}: Adding order {} at price {}",
-            self.symbol,
-            order.id(),
-            order.price()
-        );
-        let price = order.price();
-        let side = order.side();
-
-        // Check if the order has expired before adding
-        if self.has_expired(&order) {
-            return Err(OrderBookError::InvalidOperation {
-                message: "Order has already expired".to_string(),
-            });
-        }
-
-        // For post-only orders, check for price crossing
-        if order.is_post_only() && self.will_cross_market(price, side) {
-            let opposite_price = match side {
-                Side::Buy => self.best_ask().unwrap(),
-                Side::Sell => self.best_bid().unwrap(),
-            };
-
-            return Err(OrderBookError::PriceCrossing {
-                price,
-                side,
-                opposite_price,
-            });
-        }
-
-        // Handle immediate-or-cancel and fill-or-kill orders
-        if order.is_immediate() {
-            return self.handle_immediate_order(order);
-        }
-
-        // Standard limit order processing
-        let price_levels = match side {
-            Side::Buy => &self.bids,
-            Side::Sell => &self.asks,
-        };
-
-        // Get or create the price level
-        let price_level = price_levels
-            .entry(price)
-            .or_insert_with(|| Arc::new(PriceLevel::new(price)));
-
-        // Add the order to the price level
-        let order_arc = price_level.add_order(order);
-
-        // Track the order's location
-        self.order_locations.insert(order_arc.id(), (price, side));
-
-        Ok(order_arc)
-    }
-
-    /// Handle immediate-or-cancel and fill-or-kill orders
-    fn handle_immediate_order(&self, order: OrderType) -> Result<Arc<OrderType>, OrderBookError> {
-        trace!(
-            "Order book {}: Handling immediate order {} at price {}",
-            self.symbol,
-            order.id(),
-            order.price()
-        );
-        let id = order.id();
-        let quantity = order.visible_quantity();
-        let side = order.side();
-        let is_fok = order.is_fill_or_kill();
-
-        // Match the order immediately
-        let match_result = self.match_market_order(id, quantity, side)?;
-
-        // For FOK orders, if not fully filled, cancel everything
-        if is_fok && !match_result.is_complete {
-            return Err(OrderBookError::InsufficientLiquidity {
-                side,
-                requested: quantity,
-                available: match_result.executed_quantity(),
-            });
-        }
-
-        // For IOC orders, any remaining quantity is discarded
-        // Create an Arc for the order (even though it's not added to the book)
-        let order_arc = Arc::new(order);
-
-        // Update the last trade price if there were transactions
-        if !match_result.transactions.is_empty() {
-            let transactions = match_result.transactions.as_vec();
-            if let Some(last_transaction) = transactions.last() {
-                self.last_trade_price
-                    .store(last_transaction.price, Ordering::SeqCst);
-                self.has_traded.store(true, Ordering::SeqCst);
-            }
-        }
-
-        Ok(order_arc)
-    }
-
-    /// Cancel an order by ID
-    pub fn cancel_order(
-        &self,
-        order_id: OrderId,
-    ) -> Result<Option<Arc<OrderType>>, OrderBookError> {
-        trace!("Order book {}: Cancelling order {}", self.symbol, order_id);
-        // Find the order location
-        if let Some(location) = self.order_locations.get(&order_id) {
-            let (price, side) = *location;
-
-            // Get the appropriate price levels map
-            let price_levels = match side {
-                Side::Buy => &self.bids,
-                Side::Sell => &self.asks,
-            };
-
-            // Get the price level and cancel the order
-            if let Some(entry) = price_levels.get_mut(&price) {
-                let price_level = entry.value();
-
-                // Cancel the order
-                let update = OrderUpdate::Cancel { order_id };
-                let result = price_level.update_order(update)?;
-
-                // If the order was found and canceled, remove it from tracking
-                if result.is_some() {
-                    self.order_locations.remove(&order_id);
-
-                    // If this was the last order at this price level, remove the price level
-                    if price_level.order_count() == 0 {
-                        price_levels.remove(&price);
-                    }
-                }
-
-                Ok(result)
-            } else {
-                Ok(None) // Price level not found (should not happen)
-            }
-        } else {
-            Ok(None) // Order not found
-        }
-    }
-
-    /// Update an order's price and/or quantity
-    pub fn update_order(
-        &self,
-        update: OrderUpdate,
-    ) -> Result<Option<Arc<OrderType>>, OrderBookError> {
-        trace!("Order book {}: Updating order {:?}", self.symbol, update);
-        match update {
-            OrderUpdate::UpdatePrice {
-                order_id,
-                new_price,
-            } => {
-                // Find the original order
-                if let Some(original) = self.get_order(order_id) {
-                    // Cancel the original order
-                    self.cancel_order(order_id)?;
-
-                    // Create a new order with the updated price
-                    let mut new_order = *original;
-
-                    // Update the price based on order type
-                    match &mut new_order {
-                        OrderType::Standard { price, .. } => *price = new_price,
-                        OrderType::IcebergOrder { price, .. } => *price = new_price,
-                        OrderType::PostOnly { price, .. } => *price = new_price,
-                        OrderType::TrailingStop { price, .. } => *price = new_price,
-                        OrderType::PeggedOrder { price, .. } => *price = new_price,
-                        OrderType::MarketToLimit { price, .. } => *price = new_price,
-                        OrderType::ReserveOrder { price, .. } => *price = new_price,
-                    }
-
-                    // Add the updated order
-                    let result = self.add_order(new_order)?;
-                    Ok(Some(result))
-                } else {
-                    Ok(None) // Original order not found
-                }
-            }
-
-            OrderUpdate::UpdateQuantity {
-                order_id,
-                new_quantity,
-            } => {
-                // Find the order location
-                if let Some(location) = self.order_locations.get(&order_id) {
-                    let (price, side) = *location;
-
-                    // Get the appropriate price levels map
-                    let price_levels = match side {
-                        Side::Buy => &self.bids,
-                        Side::Sell => &self.asks,
-                    };
-
-                    // Get the price level
-                    if let Some(entry) = price_levels.get_mut(&price) {
-                        let price_level = entry.value();
-
-                        // Update the order
-                        let update = OrderUpdate::UpdateQuantity {
-                            order_id,
-                            new_quantity,
-                        };
-                        let result = price_level.update_order(update)?;
-
-                        // If the price level is now empty, remove it
-                        if price_level.order_count() == 0 {
-                            price_levels.remove(&price);
-                            self.order_locations.remove(&order_id);
-                        }
-
-                        Ok(result)
-                    } else {
-                        Ok(None) // Price level not found (should not happen)
-                    }
-                } else {
-                    Ok(None) // Order not found
-                }
-            }
-
-            OrderUpdate::UpdatePriceAndQuantity {
-                order_id,
-                new_price,
-                new_quantity,
-            } => {
-                // Find the original order
-                if let Some(original) = self.get_order(order_id) {
-                    // Cancel the original order
-                    self.cancel_order(order_id)?;
-
-                    // Create a new order with the updated price and quantity
-                    let mut new_order = *original;
-
-                    // Update the price and quantity based on order type
-                    match &mut new_order {
-                        OrderType::Standard {
-                            price, quantity, ..
-                        } => {
-                            *price = new_price;
-                            *quantity = new_quantity;
-                        }
-                        OrderType::IcebergOrder {
-                            price,
-                            visible_quantity,
-                            ..
-                        } => {
-                            *price = new_price;
-                            *visible_quantity = new_quantity;
-                        }
-                        OrderType::PostOnly {
-                            price, quantity, ..
-                        } => {
-                            *price = new_price;
-                            *quantity = new_quantity;
-                        }
-                        OrderType::TrailingStop {
-                            price, quantity, ..
-                        } => {
-                            *price = new_price;
-                            *quantity = new_quantity;
-                        }
-                        OrderType::PeggedOrder {
-                            price, quantity, ..
-                        } => {
-                            *price = new_price;
-                            *quantity = new_quantity;
-                        }
-                        OrderType::MarketToLimit {
-                            price, quantity, ..
-                        } => {
-                            *price = new_price;
-                            *quantity = new_quantity;
-                        }
-                        OrderType::ReserveOrder {
-                            price,
-                            visible_quantity,
-                            ..
-                        } => {
-                            *price = new_price;
-                            *visible_quantity = new_quantity;
-                        }
-                    }
-
-                    // Add the updated order
-                    let result = self.add_order(new_order)?;
-                    Ok(Some(result))
-                } else {
-                    Ok(None) // Original order not found
-                }
-            }
-
-            OrderUpdate::Cancel { order_id } => self.cancel_order(order_id),
-
-            OrderUpdate::Replace {
-                order_id,
-                price,
-                quantity,
-                side,
-            } => {
-                // Find the original order
-                if let Some(original) = self.get_order(order_id) {
-                    // Cancel the original order
-                    self.cancel_order(order_id)?;
-
-                    // Create a new order with the replacement details but preserve timestamp
-                    let timestamp = original.timestamp();
-                    let time_in_force = original.time_in_force();
-
-                    // Create the appropriate order type
-                    let new_order = match *original {
-                        OrderType::Standard { .. } => OrderType::Standard {
-                            id: order_id,
-                            price,
-                            quantity,
-                            side,
-                            timestamp,
-                            time_in_force,
-                        },
-                        OrderType::IcebergOrder {
-                            hidden_quantity, ..
-                        } => OrderType::IcebergOrder {
-                            id: order_id,
-                            price,
-                            visible_quantity: quantity,
-                            hidden_quantity,
-                            side,
-                            timestamp,
-                            time_in_force,
-                        },
-                        OrderType::PostOnly { .. } => OrderType::PostOnly {
-                            id: order_id,
-                            price,
-                            quantity,
-                            side,
-                            timestamp,
-                            time_in_force,
-                        },
-                        OrderType::ReserveOrder {
-                            hidden_quantity,
-                            replenish_threshold,
-                            replenish_amount,
-                            auto_replenish,
-                            ..
-                        } => OrderType::ReserveOrder {
-                            id: order_id,
-                            price,
-                            visible_quantity: quantity,
-                            hidden_quantity,
-                            side,
-                            timestamp,
-                            time_in_force,
-                            replenish_threshold,
-                            replenish_amount,
-                            auto_replenish,
-                        },
-                        // Add cases for other order types...
-                        _ => {
-                            return Err(OrderBookError::InvalidOperation {
-                                message: "Replace operation not supported for this order type"
-                                    .to_string(),
-                            });
-                        }
-                    };
-
-                    // Add the new order
-                    let result = self.add_order(new_order)?;
-                    Ok(Some(result))
-                } else {
-                    Ok(None) // Original order not found
-                }
-            }
         }
     }
 
