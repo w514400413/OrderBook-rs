@@ -7,3 +7,4 @@ edition = "2024"
 orderbook-rs = { path = ".." }
 tracing = "0.1.41"
 uuid = { version = "1.16.0", features = ["v4"] }
+pricelevel = "0.1.3"

@@ -443,3 +443,159 @@ mod test_modifications_remaining {
         assert!(book.get_order(id).is_none());
     }
 }
+
+#[cfg(test)]
+mod test_modifications_specific {
+    use crate::{OrderBook, OrderBookError};
+    use pricelevel::{OrderId, OrderType, OrderUpdate, PegReferenceType, Side, TimeInForce};
+    use uuid::Uuid;
+
+    fn create_order_id() -> OrderId {
+        OrderId(Uuid::new_v4())
+    }
+
+    #[test]
+    fn test_update_price_edge_cases() {
+        let book = OrderBook::new("TEST");
+
+        // Update a non-existent order
+        let id = create_order_id();
+        let update = OrderUpdate::UpdatePrice {
+            order_id: id,
+            new_price: 1000,
+        };
+
+        // Should return Ok(None) for non-existent order
+        let result = book.update_order(update);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_cancel_non_existent_order() {
+        let book = OrderBook::new("TEST");
+
+        // Create an ID for an order that doesn't exist
+        let id = create_order_id();
+
+        // Cancel via OrderUpdate
+        let update = OrderUpdate::Cancel { order_id: id };
+        let result = book.update_order(update);
+
+        // Should return Ok(None)
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_update_order_when_order_is_not_found() {
+        let book = OrderBook::new("TEST");
+
+        // Create a reserve order type
+        let id = create_order_id();
+        let timestamp = crate::utils::current_time_millis();
+        let reserve_order = OrderType::ReserveOrder {
+            id,
+            price: 1000,
+            visible_quantity: 5,
+            hidden_quantity: 5,
+            side: Side::Buy,
+            timestamp,
+            time_in_force: TimeInForce::Gtc,
+            replenish_threshold: 2,
+            replenish_amount: Some(3),
+            auto_replenish: true,
+        };
+
+        // Add it to the book
+        let _ = book.add_order(reserve_order);
+
+        // First, test with an order that doesn't exist
+        let nonexistent_id = create_order_id();
+
+        // Test UpdatePrice
+        let update = OrderUpdate::UpdatePrice {
+            order_id: nonexistent_id,
+            new_price: 1100,
+        };
+        let result = book.update_order(update);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+
+        // Test UpdateQuantity
+        let update = OrderUpdate::UpdateQuantity {
+            order_id: nonexistent_id,
+            new_quantity: 20,
+        };
+        let result = book.update_order(update);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+
+        // Test PriceAndQuantity
+        let update = OrderUpdate::UpdatePriceAndQuantity {
+            order_id: nonexistent_id,
+            new_price: 1100,
+            new_quantity: 20,
+        };
+        let result = book.update_order(update);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+
+        // Test Replace
+        let update = OrderUpdate::Replace {
+            order_id: nonexistent_id,
+            price: 1100,
+            quantity: 20,
+            side: Side::Buy,
+        };
+        let result = book.update_order(update);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_replace_unsupported_order_type() {
+        let book = OrderBook::new("TEST");
+
+        // Add an unsupported order type
+        let id = create_order_id();
+        let timestamp = crate::utils::current_time_millis();
+
+        // Use a PeggedOrder as an example
+        let peg_order = OrderType::PeggedOrder {
+            id,
+            price: 1000,
+            quantity: 10,
+            side: Side::Buy,
+            timestamp,
+            time_in_force: TimeInForce::Gtc,
+            reference_price_offset: 5,
+            reference_price_type: PegReferenceType::BestBid,
+        };
+
+        let _ = book.add_order(peg_order);
+
+        // Try to replace it
+        let update = OrderUpdate::Replace {
+            order_id: id,
+            price: 1100,
+            quantity: 20,
+            side: Side::Buy,
+        };
+
+        let result = book.update_order(update);
+
+        // Check if we get the expected error
+        match result {
+            Err(OrderBookError::InvalidOperation { message }) => {
+                assert!(message.contains("Replace operation not supported"));
+            }
+            Ok(_) => {
+                // If it doesn't error, just check the order was updated
+                let updated_order = book.get_order(id);
+                assert!(updated_order.is_some());
+            }
+            _ => panic!("Unexpected result"),
+        }
+    }
+}

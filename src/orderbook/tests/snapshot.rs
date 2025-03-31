@@ -707,3 +707,50 @@ mod test_snapshot_remaining {
         assert_eq!(total_ask_value, 15150);
     }
 }
+
+#[cfg(test)]
+mod test_snapshot_specific {
+    use crate::OrderBookSnapshot;
+    use pricelevel::PriceLevelSnapshot;
+    use tracing::trace;
+
+    #[test]
+    fn test_snapshot_trace_output() {
+        // Create a test snapshot
+        let bid = PriceLevelSnapshot {
+            price: 1000,
+            visible_quantity: 10,
+            hidden_quantity: 0,
+            order_count: 1,
+            orders: Vec::new(),
+        };
+
+        let ask = PriceLevelSnapshot {
+            price: 1010,
+            visible_quantity: 15,
+            hidden_quantity: 0,
+            order_count: 1,
+            orders: Vec::new(),
+        };
+
+        let snapshot = OrderBookSnapshot {
+            symbol: "TEST".to_string(),
+            timestamp: 12345678,
+            bids: vec![bid],
+            asks: vec![ask],
+        };
+
+        // Call functions that have trace output
+        trace!("About to test snapshot trace outputs");
+
+        let best_bid = snapshot.best_bid();
+        trace!("Best bid: {:?}", best_bid);
+
+        let best_ask = snapshot.best_ask();
+        trace!("Best ask: {:?}", best_ask);
+
+        // Verify correct results
+        assert_eq!(best_bid, Some((1000, 10)));
+        assert_eq!(best_ask, Some((1010, 15)));
+    }
+}

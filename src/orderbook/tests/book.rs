@@ -836,3 +836,92 @@ mod test_book_remaining {
         assert!(snapshot.timestamp > 0);
     }
 }
+
+#[cfg(test)]
+mod test_book_specific {
+    use crate::OrderBook;
+    use pricelevel::{OrderId, Side, TimeInForce};
+    use uuid::Uuid;
+
+    fn create_order_id() -> OrderId {
+        OrderId(Uuid::new_v4())
+    }
+
+    #[test]
+    fn test_get_orders_at_price() {
+        let book = OrderBook::new("TEST");
+
+        // Add multiple orders at the same price
+        let id1 = create_order_id();
+        let id2 = create_order_id();
+        let price = 1000;
+
+        let _ = book.add_limit_order(id1, price, 10, Side::Buy, TimeInForce::Gtc);
+        let _ = book.add_limit_order(id2, price, 15, Side::Buy, TimeInForce::Gtc);
+
+        // Get orders at this price
+        let orders = book.get_orders_at_price(price, Side::Buy);
+
+        // Should have 2 orders
+        assert_eq!(orders.len(), 2);
+
+        // Check both orders are present
+        let order_ids: Vec<OrderId> = orders.iter().map(|o| o.id()).collect();
+        assert!(order_ids.contains(&id1));
+        assert!(order_ids.contains(&id2));
+
+        // Try getting orders at a price with no orders
+        let empty_orders = book.get_orders_at_price(1100, Side::Buy);
+        assert_eq!(empty_orders.len(), 0);
+    }
+
+    #[test]
+    fn test_get_all_orders() {
+        let book = OrderBook::new("TEST");
+
+        // Add orders on both sides
+        let id1 = create_order_id();
+        let id2 = create_order_id();
+        let id3 = create_order_id();
+
+        let _ = book.add_limit_order(id1, 1000, 10, Side::Buy, TimeInForce::Gtc);
+        let _ = book.add_limit_order(id2, 990, 15, Side::Buy, TimeInForce::Gtc);
+        let _ = book.add_limit_order(id3, 1010, 5, Side::Sell, TimeInForce::Gtc);
+
+        // Get all orders
+        let all_orders = book.get_all_orders();
+
+        // Should have 3 orders
+        assert_eq!(all_orders.len(), 3);
+
+        // Check all orders are present
+        let order_ids: Vec<OrderId> = all_orders.iter().map(|o| o.id()).collect();
+        assert!(order_ids.contains(&id1));
+        assert!(order_ids.contains(&id2));
+        assert!(order_ids.contains(&id3));
+    }
+
+    #[test]
+    fn test_match_market_order_empty_book() {
+        let book = OrderBook::new("TEST");
+
+        // Try to match a market order on an empty book
+        let id = create_order_id();
+        let result = book.match_market_order(id, 10, Side::Buy);
+
+        // Should fail with insufficient liquidity
+        assert!(result.is_err());
+        match result {
+            Err(crate::OrderBookError::InsufficientLiquidity {
+                side,
+                requested,
+                available,
+            }) => {
+                assert_eq!(side, Side::Buy);
+                assert_eq!(requested, 10);
+                assert_eq!(available, 0);
+            }
+            _ => panic!("Expected InsufficientLiquidity error"),
+        }
+    }
+}

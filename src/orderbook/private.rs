@@ -487,3 +487,74 @@ mod test_private_remaining {
         assert_eq!(book.best_ask(), None);
     }
 }
+
+#[cfg(test)]
+mod test_private_specific {
+    use crate::{OrderBook, OrderBookError};
+    use pricelevel::{OrderId, OrderType, Side, TimeInForce};
+    use uuid::Uuid;
+
+    fn create_order_id() -> OrderId {
+        OrderId(Uuid::new_v4())
+    }
+
+    #[test]
+    fn test_handle_immediate_order_fok_validation() {
+        let book = OrderBook::new("TEST");
+
+        // Add a sell order with 5 quantity
+        let sell_id = create_order_id();
+        let _ = book.add_limit_order(sell_id, 1000, 5, Side::Sell, TimeInForce::Gtc);
+
+        // Create a FOK buy order with 10 quantity (more than available)
+        let buy_id = create_order_id();
+        let buy_order = OrderType::Standard {
+            id: buy_id,
+            price: 1000,
+            quantity: 10,
+            side: Side::Buy,
+            timestamp: crate::utils::current_time_millis(),
+            time_in_force: TimeInForce::Fok,
+        };
+
+        // Pre-check will determine there's not enough liquidity
+        let result = book.handle_immediate_order(buy_order);
+        assert!(result.is_err());
+        match result {
+            Err(OrderBookError::InsufficientLiquidity {
+                side,
+                requested,
+                available,
+            }) => {
+                assert_eq!(side, Side::Buy);
+                assert_eq!(requested, 10);
+                assert_eq!(available, 5);
+            }
+            _ => panic!("Expected InsufficientLiquidity error"),
+        }
+    }
+
+    #[test]
+    fn test_match_market_order_no_matches() {
+        let book = OrderBook::new("TEST");
+
+        // Attempt to match a market order on an empty book
+        let id = create_order_id();
+        let result = book.match_market_order(id, 10, Side::Buy);
+
+        // Should return an error since there are no matching orders
+        assert!(result.is_err());
+        match result {
+            Err(OrderBookError::InsufficientLiquidity {
+                side,
+                requested,
+                available,
+            }) => {
+                assert_eq!(side, Side::Buy);
+                assert_eq!(requested, 10);
+                assert_eq!(available, 0);
+            }
+            _ => panic!("Expected InsufficientLiquidity error"),
+        }
+    }
+}

@@ -537,3 +537,44 @@ mod test_operations_remaining {
         assert!(order.is_post_only());
     }
 }
+
+#[cfg(test)]
+mod test_operations_specific {
+    use crate::OrderBook;
+    use pricelevel::{OrderId, Side, TimeInForce};
+    use uuid::Uuid;
+
+    use tracing::trace;
+
+    fn create_order_id() -> OrderId {
+        OrderId(Uuid::new_v4())
+    }
+
+    #[test]
+    fn test_submit_market_order_with_tracing() {
+        let book = OrderBook::new("TEST");
+
+        // Add a sell order
+        let sell_id = create_order_id();
+        let _ = book.add_limit_order(sell_id, 1000, 10, Side::Sell, TimeInForce::Gtc);
+
+        // Submit a market buy order with tracing enabled
+        let buy_id = create_order_id();
+
+        // Use trace macro to generate some trace output
+        trace!(
+            "About to submit market order {} for {} at side {:?}",
+            buy_id,
+            5,
+            Side::Buy
+        );
+
+        let result = book.submit_market_order(buy_id, 5, Side::Buy);
+        assert!(result.is_ok());
+
+        // Verify order was matched correctly
+        let remaining_sell = book.get_order(sell_id);
+        assert!(remaining_sell.is_some());
+        assert_eq!(remaining_sell.unwrap().visible_quantity(), 5);
+    }
+}
