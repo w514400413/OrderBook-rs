@@ -1,6 +1,7 @@
-use criterion::{BenchmarkId, Criterion, black_box};
+use criterion::{BenchmarkId, Criterion};
 use orderbook_rs::OrderBook;
 use pricelevel::{OrderId, Side, TimeInForce};
+use std::hint::black_box;
 use uuid::Uuid;
 
 /// Register all benchmarks for updating orders in an order book

@@ -1,6 +1,7 @@
-use criterion::{Criterion, black_box};
+use criterion::Criterion;
 use orderbook_rs::OrderBook;
 use pricelevel::{OrderId, Side, TimeInForce};
+use std::hint::black_box;
 use uuid::Uuid;
 
 /// Register benchmarks for mixed/realistic order book operations
