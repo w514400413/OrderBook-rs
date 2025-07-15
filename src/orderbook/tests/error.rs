@@ -6,24 +6,21 @@ mod tests {
     #[test]
     fn test_display_price_level_error() {
         let err = OrderBookError::PriceLevelError(PriceLevelError::InvalidFormat);
-        assert_eq!(format!("{}", err), "Price level error: Invalid format");
+        assert_eq!(format!("{err}"), "Price level error: Invalid format");
     }
 
     #[test]
     fn test_display_order_not_found() {
         let order_id = "e4968197-6137-47a4-ba79-690d8c552248";
         let err = OrderBookError::OrderNotFound(order_id.to_string());
-        assert_eq!(format!("{}", err), format!("Order not found: {}", order_id));
+        assert_eq!(format!("{err}"), format!("Order not found: {}", order_id));
     }
 
     #[test]
     fn test_display_invalid_price_level() {
         let price = 1000;
         let err = OrderBookError::InvalidPriceLevel(price);
-        assert_eq!(
-            format!("{}", err),
-            format!("Invalid price level: {}", price)
-        );
+        assert_eq!(format!("{err}"), format!("Invalid price level: {}", price));
     }
 
     #[test]
@@ -34,7 +31,7 @@ mod tests {
             opposite_price: 999,
         };
         assert_eq!(
-            format!("{}", err),
+            format!("{err}"),
             "Price crossing: BUY 1000 would cross opposite at 999"
         );
     }
@@ -47,7 +44,7 @@ mod tests {
             available: 50,
         };
         assert_eq!(
-            format!("{}", err),
+            format!("{err}"),
             "Insufficient liquidity for SELL order: requested 100, available 50"
         );
     }
@@ -58,10 +55,7 @@ mod tests {
         let err = OrderBookError::InvalidOperation {
             message: message.to_string(),
         };
-        assert_eq!(
-            format!("{}", err),
-            format!("Invalid operation: {}", message)
-        );
+        assert_eq!(format!("{err}"), format!("Invalid operation: {}", message));
     }
 
     #[test]

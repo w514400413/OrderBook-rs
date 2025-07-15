@@ -1,12 +1,16 @@
 //! OrderBook implementation for managing multiple price levels and order matching.
 
-mod book;
-mod error;
-mod operations;
-mod snapshot;
+pub mod book;
+pub mod error;
+pub mod matching;
 
-mod modifications;
+mod cache;
+/// Contains the core logic for modifying the order book state, such as adding, canceling, or updating orders.
+pub mod modifications;
+pub mod operations;
+mod pool;
 mod private;
+pub mod snapshot;
 mod tests;
 
 pub use book::OrderBook;

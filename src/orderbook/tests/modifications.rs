@@ -599,3 +599,155 @@ mod test_modifications_specific {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::orderbook::OrderBookError;
+    use crate::orderbook::book::OrderBook;
+    use crate::orderbook::modifications::OrderQuantity;
+    use pricelevel::{OrderId, OrderType, OrderUpdate, Side, TimeInForce};
+
+    fn setup_book_with_orders() -> OrderBook {
+        let book = OrderBook::new("TEST");
+        let sell_order = OrderType::Standard {
+            id: OrderId::new(),
+            side: Side::Sell,
+            price: 100,
+            quantity: 10,
+            time_in_force: TimeInForce::Gtc,
+            timestamp: 0,
+        };
+        book.add_order(sell_order).unwrap();
+
+        let buy_order = OrderType::Standard {
+            id: OrderId::new(),
+            side: Side::Buy,
+            price: 90,
+            quantity: 10,
+            time_in_force: TimeInForce::Gtc,
+            timestamp: 0,
+        };
+        book.add_order(buy_order).unwrap();
+        book
+    }
+
+    #[test]
+    fn test_add_post_only_order_crossing_market() {
+        let book = setup_book_with_orders();
+        let post_only_order = OrderType::PostOnly {
+            id: OrderId::new(),
+            side: Side::Buy,
+            price: 100, // This price crosses the best ask (100)
+            quantity: 5,
+            time_in_force: TimeInForce::Gtc,
+            timestamp: 0,
+        };
+
+        let result = book.add_order(post_only_order);
+        assert!(matches!(result, Err(OrderBookError::PriceCrossing { .. })));
+    }
+
+    #[test]
+    fn test_add_expired_order() {
+        let book = OrderBook::new("TEST");
+        book.set_market_close_timestamp(100); // Market closed at timestamp 100
+
+        let expired_order = OrderType::Standard {
+            id: OrderId::new(),
+            side: Side::Buy,
+            price: 95,
+            quantity: 10,
+            time_in_force: TimeInForce::Day, // Day order
+            timestamp: 101,                  // Submitted after market close
+        };
+
+        let result = book.add_order(expired_order);
+        assert!(matches!(
+            result,
+            Err(OrderBookError::InvalidOperation { .. })
+        ));
+    }
+
+    #[test]
+    fn test_successful_cancel_order_removes_level() {
+        let book = OrderBook::new("TEST");
+        let order_id = OrderId::new();
+        let order = OrderType::Standard {
+            id: order_id,
+            side: Side::Sell,
+            price: 100,
+            quantity: 10,
+            time_in_force: TimeInForce::Gtc,
+            timestamp: 0,
+        };
+        book.add_order(order).unwrap();
+
+        assert!(book.asks.contains_key(&100));
+        book.cancel_order(order_id).unwrap();
+        assert!(!book.asks.contains_key(&100)); // Price level should be gone
+        assert!(book.order_locations.get(&order_id).is_none());
+    }
+
+    #[test]
+    fn test_update_order_not_found() {
+        let book = OrderBook::new("TEST");
+        let non_existent_id = OrderId::new();
+        let result = book.update_order(OrderUpdate::Cancel {
+            order_id: non_existent_id,
+        });
+        assert!(result.is_ok() && result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_update_price_and_quantity() {
+        let book = setup_book_with_orders();
+        let original_order_id = book.bids.get(&90).unwrap().iter_orders()[0].id();
+
+        let result = book.update_order(OrderUpdate::UpdatePriceAndQuantity {
+            order_id: original_order_id,
+            new_price: 92,
+            new_quantity: 12,
+        });
+
+        assert!(result.is_ok());
+        let updated_order = book.get_order(original_order_id).unwrap();
+        assert_eq!(updated_order.price(), 92);
+        assert_eq!(updated_order.quantity(), 12);
+        assert!(book.bids.contains_key(&92));
+        assert!(!book.bids.contains_key(&90));
+    }
+
+    #[test]
+    fn test_set_quantity_for_reserve_order() {
+        let mut order = OrderType::ReserveOrder {
+            id: OrderId::new(),
+            side: Side::Buy,
+            price: 100,
+            visible_quantity: 10,
+            hidden_quantity: 90,
+            replenish_amount: Some(10),
+            auto_replenish: true,
+            replenish_threshold: 0,
+            time_in_force: TimeInForce::Gtc,
+            timestamp: 0,
+        };
+
+        // Simulate a partial fill of 15 units
+        order.set_quantity(85); // 100 - 15 = 85
+
+        // After the fill, the visible part is consumed and then immediately replenished.
+        assert_eq!(order.quantity(), 10); // The visible quantity is replenished to 10.
+        assert_eq!(order.total_quantity(), 85); // The total remaining quantity is correct.
+
+        // Verify the internal state of the order
+        if let OrderType::ReserveOrder {
+            visible_quantity,
+            hidden_quantity,
+            ..
+        } = order
+        {
+            assert_eq!(visible_quantity, 10);
+            assert_eq!(hidden_quantity, 75);
+        }
+    }
+}

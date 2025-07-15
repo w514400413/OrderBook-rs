@@ -1,5 +1,6 @@
 mod book;
 mod error;
+mod matching;
 mod modifications;
 mod operations;
 mod order;

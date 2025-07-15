@@ -1,5 +1,6 @@
 //! Core OrderBook implementation for managing price levels and orders
 
+use super::cache::PriceLevelCache;
 use super::error::OrderBookError;
 use super::snapshot::OrderBookSnapshot;
 use crate::utils::current_time_millis;
@@ -30,7 +31,7 @@ pub struct OrderBook {
     pub(super) order_locations: DashMap<OrderId, (u64, Side)>,
 
     /// Generator for unique transaction IDs
-    transaction_id_generator: UuidGenerator,
+    pub(super) transaction_id_generator: UuidGenerator,
 
     /// The last price at which a trade occurred
     pub(super) last_trade_price: AtomicU64,
@@ -43,6 +44,9 @@ pub struct OrderBook {
 
     /// Flag indicating if market close is set
     pub(super) has_market_close: AtomicBool,
+
+    /// A cache for storing best bid/ask prices to avoid recalculation
+    pub(super) cache: PriceLevelCache,
 }
 
 impl OrderBook {
@@ -61,6 +65,7 @@ impl OrderBook {
             has_traded: AtomicBool::new(false),
             market_close_timestamp: AtomicU64::new(0),
             has_market_close: AtomicBool::new(false),
+            cache: PriceLevelCache::new(),
         }
     }
 
@@ -87,30 +92,26 @@ impl OrderBook {
 
     /// Get the best bid price, if any
     pub fn best_bid(&self) -> Option<u64> {
-        let mut best_price = None;
-
-        // Find the highest price in bids
-        for item in self.bids.iter() {
-            let price = *item.key();
-            if best_price.is_none() || price > best_price.unwrap() {
-                best_price = Some(price);
-            }
+        if let Some(cached_bid) = self.cache.get_cached_best_bid() {
+            return Some(cached_bid);
         }
+
+        let best_price = self.bids.iter().map(|item| *item.key()).max();
+
+        self.cache.update_best_prices(best_price, None);
 
         best_price
     }
 
     /// Get the best ask price, if any
     pub fn best_ask(&self) -> Option<u64> {
-        let mut best_price = None;
-
-        // Find the lowest price in asks
-        for item in self.asks.iter() {
-            let price = *item.key();
-            if best_price.is_none() || price < best_price.unwrap() {
-                best_price = Some(price);
-            }
+        if let Some(cached_ask) = self.cache.get_cached_best_ask() {
+            return Some(cached_ask);
         }
+
+        let best_price = self.asks.iter().map(|item| *item.key()).min();
+
+        self.cache.update_best_prices(None, best_price);
 
         best_price
     }
@@ -178,23 +179,23 @@ impl OrderBook {
         result
     }
 
-    /// Get an order by ID
+    /// Get an order by its ID
     pub fn get_order(&self, order_id: OrderId) -> Option<Arc<OrderType>> {
-        // Check if we know where this order is
+        // Get the order location without locking
         if let Some(location) = self.order_locations.get(&order_id) {
             let (price, side) = *location;
 
-            // Get appropriate price level
             let price_levels = match side {
                 Side::Buy => &self.bids,
                 Side::Sell => &self.asks,
             };
 
+            // Get the price level
             if let Some(price_level) = price_levels.get(&price) {
-                // Look through orders at this price level
+                // Iterate through the orders at this level to find the one with the matching ID
                 for order in price_level.iter_orders() {
                     if order.id() == order_id {
-                        return Some(order);
+                        return Some(order.clone());
                     }
                 }
             }
@@ -214,99 +215,52 @@ impl OrderBook {
             "Order book {}: Matching market order {} for {} at side {:?}",
             self.symbol, order_id, quantity, side
         );
-        // Determine which side of the book to match against
-        let opposite_side = side.opposite();
-        let match_side = match opposite_side {
-            Side::Buy => &self.bids,  // Market sell matches against bids
-            Side::Sell => &self.asks, // Market buy matches against asks
-        };
+        self.match_order(order_id, side, quantity, None)
+    }
 
-        let mut remaining_quantity = quantity;
-        let mut match_result = MatchResult::new(order_id, quantity);
-        let mut filled_orders = Vec::new();
-
-        // Keep matching until we've filled the order or run out of liquidity
-        while remaining_quantity > 0 {
-            // Get the best price to match against
-            let best_price = match opposite_side {
-                Side::Buy => self.best_bid(), // For sell orders, match against highest bid
-                Side::Sell => self.best_ask(), // For buy orders, match against lowest ask
-            };
-
-            if let Some(price) = best_price {
-                // Match against this price level
-                if let Some(entry) = match_side.get_mut(&price) {
-                    let price_level = entry.value();
-
-                    let price_level_match = price_level.match_order(
-                        remaining_quantity,
-                        order_id,
-                        &self.transaction_id_generator,
-                    );
-
-                    // Update last trade price if we had matches
-                    if !price_level_match.transactions.is_empty() {
-                        self.last_trade_price.store(price, Ordering::SeqCst);
-                        self.has_traded.store(true, Ordering::SeqCst);
-                    }
-
-                    // Update the match result with transactions
-                    for transaction in price_level_match.transactions.as_vec() {
-                        match_result.add_transaction(*transaction);
-                    }
-
-                    // Track filled orders to remove from tracking later
-                    for filled_order_id in &price_level_match.filled_order_ids {
-                        match_result.add_filled_order_id(*filled_order_id);
-                        filled_orders.push(*filled_order_id);
-                    }
-
-                    // Update remaining quantity
-                    remaining_quantity = price_level_match.remaining_quantity;
-
-                    // If the price level is now empty, remove it
-                    if price_level.order_count() == 0 {
-                        // We must drop the mutable reference before removing
-                        drop(entry);
-                        match_side.remove(&price);
-                    }
-
-                    if remaining_quantity == 0 {
-                        break; // Order fully matched
-                    }
-                } else {
-                    // This shouldn't happen since we just got the price from the map
-                    break;
-                }
-            } else {
-                // No more price levels to match against
-                break;
-            }
-        }
-
-        // Remove all filled orders from tracking
-        for order_id in filled_orders {
-            self.order_locations.remove(&order_id);
-        }
-
-        // Update final match result
-        match_result.remaining_quantity = remaining_quantity;
-        match_result.is_complete = remaining_quantity == 0;
-
-        if match_result.transactions.as_vec().is_empty() {
-            // Order couldn't be matched at all
-            Err(OrderBookError::InsufficientLiquidity {
-                side,
-                requested: quantity,
-                available: 0,
-            })
-        } else if !match_result.is_complete && remaining_quantity > 0 {
-            // If the order was partially executed, you should still return Ok with the match_result
-            // but make sure the tests reflect this expected behavior
-            Ok(match_result)
-        } else {
-            Ok(match_result)
-        }
+    /// Attempts to match a limit order in the order book.
+    ///
+    /// # Parameters
+    /// - `order_id`: The unique identifier of the order to be matched.
+    /// - `quantity`: The quantity of the order to be matched.
+    /// - `side`: The side of the order book (e.g., Buy or Sell) on which the order resides.
+    /// - `limit_price`: The maximum (for Buy) or minimum (for Sell) acceptable price
+    ///   for the order.
+    ///
+    /// # Returns
+    /// - `Ok(MatchResult)`: If the order is successfully matched, returning information
+    ///   about the match, including possibly filled quantities and pricing details.
+    /// - `Err(OrderBookError)`: If the order cannot be matched due to an error, such as
+    ///   invalid parameters or an existing order book issue.
+    ///
+    /// # Behavior
+    /// - Logs a trace message with details about the order and its intended match parameters.
+    /// - Internally delegates to the `match_order` function, passing the provided parameters,
+    ///   including the optional `limit_price` which specifies the price constraint.
+    ///
+    /// # Errors
+    /// This function returns an error in cases such as:
+    /// - The specified `order_id` is not found in the order book.
+    /// - The provided parameters are invalid (e.g., negative quantity).
+    /// - The attempted match is not feasible within the order book's current state.
+    ///
+    /// # Notes
+    /// - The `limit_price` parameter sets a constraint on the match price:
+    ///   - For Buy orders, it specifies the maximum acceptable price.
+    ///   - For Sell orders, it specifies the minimum acceptable price.
+    /// - If `limit_price` is not met during the matching process, the order will not be executed.
+    pub fn match_limit_order(
+        &self,
+        order_id: OrderId,
+        quantity: u64,
+        side: Side,
+        limit_price: u64,
+    ) -> Result<MatchResult, OrderBookError> {
+        trace!(
+            "Order book {}: Matching limit order {} for {} at side {:?} with limit price {}",
+            self.symbol, order_id, quantity, side, limit_price
+        );
+        self.match_order(order_id, side, quantity, Some(limit_price))
     }
 
     /// Create a snapshot of the current order book state

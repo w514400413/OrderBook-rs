@@ -1,5 +1,6 @@
 pub mod add_orders;
 pub mod match_orders;
+pub mod matching;
 pub mod mixed_operations;
 pub mod update_orders;
 
@@ -9,4 +10,5 @@ pub fn register_benchmarks(c: &mut criterion::Criterion) {
     match_orders::register_benchmarks(c);
     update_orders::register_benchmarks(c);
     mixed_operations::register_benchmarks(c);
+    matching::register_benchmarks(c);
 }

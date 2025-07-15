@@ -27,17 +27,12 @@ mod tests {
 
         // The times should be very close to each other
         // Allow a small difference due to execution time between the two calls
-        let difference = if time_direct >= time_from_function {
-            time_direct - time_from_function
-        } else {
-            time_from_function - time_direct
-        };
+        let difference = time_direct.abs_diff(time_from_function);
 
         // The difference should be no more than 10ms (this is generous)
         assert!(
             difference <= 10,
-            "Time difference should be small, but got {}ms",
-            difference
+            "Time difference should be small, but got {difference}ms"
         );
     }
 
@@ -83,17 +78,12 @@ mod tests {
 
         // The times should be very close to each other
         // Allow a small difference due to execution time between the two calls
-        let difference = if time_direct >= time_from_function {
-            time_direct - time_from_function
-        } else {
-            time_from_function - time_direct
-        };
+        let difference = time_direct.abs_diff(time_from_function);
 
         // The difference should be no more than 10ms (this is generous)
         assert!(
             difference <= 10,
-            "Time difference should be small, but got {}ms",
-            difference
+            "Time difference should be small, but got {difference}ms"
         );
     }
 

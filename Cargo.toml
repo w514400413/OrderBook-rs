@@ -1,6 +1,6 @@
 [package]
 name = "orderbook-rs"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2024"
 authors = ["Joaquin Bejar <jb@taunais.com>"]
 description = "A high-performance, lock-free price level implementation for limit order books in Rust. This library provides the building blocks for creating efficient trading systems with support for multiple order types and concurrent access patterns."
@@ -28,25 +28,25 @@ include = [
 ]
 
 [dependencies]
-tracing = "0.1"
-serde = { version = "1.0", features = ["derive"] }
-uuid = { version = "1.17", features = ["v4", "v5", "serde"] }
-pricelevel = "0.1"
-dashmap = "6.1"
-serde_json = "1.0"
-
+tracing = { workspace = true }
+uuid = { workspace = true }
+pricelevel = { workspace = true }
+dashmap = { workspace = true }
+serde_json = { workspace = true }
+serde = { workspace = true }
 
 [dev-dependencies]
-criterion = { version = "0.6", default-features = false, features = ["html_reports"] }
-
-[[test]]
-name = "tests"
-path = "tests/unit/mod.rs"
+criterion = { version = "0.6", features = ["html_reports"] }
 
 [[bench]]
 name = "benches"
 path = "benches/mod.rs"
 harness = false
+
+[[test]]
+name = "tests"
+path = "tests/unit/mod.rs"
+
 
 [lib]
 name = "orderbook_rs"
@@ -61,3 +61,8 @@ members = [
 [workspace.dependencies]
 orderbook-rs = { path = "." }
 tracing = "0.1.41"
+pricelevel = "0.2"
+uuid = { version = "1.17", features = ["v4", "v5", "serde"] }
+dashmap = "6.1"
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }

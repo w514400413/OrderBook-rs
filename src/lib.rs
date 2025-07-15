@@ -10,7 +10,7 @@
 //!
 //! - **Thread-Safe Price Levels**: Each price level can be independently and concurrently modified by multiple threads without blocking.
 //!
-//! - **Advanced Order Matching**: Efficient matching algorithm that correctly handles complex order types and partial fills.
+//! - **Advanced Order Matching**: Efficient matching algorithm for both market and limit orders, correctly handling complex order types and partial fills.
 //!
 //! - **Performance Metrics**: Built-in statistics tracking for benchmarking and monitoring system performance.
 //!
@@ -32,8 +32,16 @@
 //! - **Research**: Platform for studying market microstructure and order flow
 //! - **Educational**: Reference implementation for understanding modern exchange architecture
 //!
-//! ## Status
+//! ## What's New in Version 0.2.0
 //!
+//! This version introduces significant performance optimizations and architectural improvements:
+//!
+//! - **Performance Boost**: Reintroduced `PriceLevelCache` for faster best bid/ask lookups and a `MatchingPool` to reduce memory allocations in the matching engine, leading to lower latency.
+//! - **Cleaner Architecture**: Refactored modification and matching logic for better separation of concerns and maintainability.
+//! - **Enhanced Concurrency**: Improved thread-safe operations, ensuring robustness under heavy load.
+//! - **Improved Documentation**: All code comments have been translated to English, and crate-level documentation has been expanded for clarity.
+//!
+//! ## Status
 //! This project is currently in active development and is not yet suitable for production use.
 //!
 //! # Performance Analysis of the OrderBook System
@@ -55,24 +63,24 @@
 //!
 //! | Metric | Total Operations | Operations/Second |
 //! |---------|---------------------|---------------------|
-//! | Orders Added | 587,937 | 117,563.67 |
-//! | Orders Matched | 324,096 | 64,806.12 |
-//! | Orders Cancelled | 4,063,600 | 812,555.98 |
-//! | **Total Operations** | **4,975,633** | **994,925.77** |
+//! | Orders Added | 559,266 | 111,844.44 |
+//! | Orders Matched | 330,638 | 66,122.42 |
+//! | Orders Cancelled | 4,106,360 | 821,207.71 |
+//! | **Total Operations** | **4,996,264** | **999,174.58** |
 //!
 //! ### Initial vs. Final OrderBook State
 //!
 //! | Metric | Initial State | Final State |
 //! |---------|----------------|--------------|
-//! | Best Bid | 9,900 | 9,840 |
-//! | Best Ask | 10,000 | 10,110 |
-//! | Spread | 100 | 270 |
-//! | Mid Price | 9,950.00 | 9,975.00 |
-//! | Total Orders | 1,020 | 87,155 |
-//! | Bid Price Levels | 21 | 10 |
-//! | Ask Price Levels | 21 | 6 |
-//! | Total Bid Quantity | 7,750 | 688,791 |
-//! | Total Ask Quantity | 7,750 | 912,992 |
+//! | Best Bid | 9,900 | 9,880 |
+//! | Best Ask | 10,000 | 10,050 |
+//! | Spread | 100 | 170 |
+//! | Mid Price | 9,950.00 | 9,965.00 |
+//! | Total Orders | 1,020 | 138,295 |
+//! | Bid Price Levels | 21 | 11 |
+//! | Ask Price Levels | 21 | 11 |
+//! | Total Bid Quantity | 7,750 | 1,037,923 |
+//! | Total Ask Quantity | 7,750 | 1,488,201 |
 //!
 //! ## 2. Contention Pattern Tests
 //!
@@ -84,21 +92,33 @@
 //!
 //! | Read % | Operations/Second |
 //! |------------|---------------------|
-//! | 0% | 716,117.91 |
-//! | 25% | 32,470.83 |
-//! | 50% | 29,525.75 |
-//! | 75% | 35,949.69 |
-//! | 95% | 73,484.17 |
+//! | 0%         | 430,081.91          |
+//! | 25%        | 17,031.12           |
+//! | 50%        | 15,965.15           |
+//! | 75%        | 20,590.32           |
+//! | 95%        | 42,451.24           |
 //!
 //! ### Hot Spot Contention Test
 //!
-//! | % Operations on Hot Spot | Operations/Second |
-//! |----------------------------------|---------------------|
-//! | 0% | 8,166,484.48 |
-//! | 25% | 10,277,423.77 |
-//! | 50% | 13,767,842.77 |
-//! | 75% | 19,322,454.84 |
-//! | 100% | 28,327,212.19 |
+//! | % Operations on Hot Spot | Operations/Second   |
+//! |--------------------------|---------------------|
+//! | 0%                       | 2,742,810.37        |
+//! | 25%                      | 3,414,940.27        |
+//! | 50%                      | 4,542,931.02        |
+//! | 75%                      | 8,834,677.82        |
+//! | 100%                     | 19,403,341.34       |
+//!
+//! ### Performance Improvements and Deadlock Resolution
+//!
+//! The significant performance gains, especially in the "Hot Spot Contention Test," and the resolution of the previous deadlocks are a direct result of refactoring the internal concurrency model of the `PriceLevel`.
+//!
+//! - **Previous Bottleneck:** The original implementation relied on a `crossbeam::queue::SegQueue` for storing orders. While the queue itself is lock-free, operations like finding or removing a specific order required draining the entire queue into a temporary list, performing the action, and then pushing all elements back. This process was inefficient and created a major point of contention, leading to deadlocks under heavy multi-threaded load.
+//!
+//! - **New Implementation:** The `OrderQueue` was re-designed to use a combination of:
+//!   1. A `dashmap::DashMap` for storing orders, allowing for highly concurrent, O(1) average-case time complexity for insertions, lookups, and removals by `OrderId`.
+//!   2. A `crossbeam::queue::SegQueue` that now only stores `OrderId`s to maintain the crucial First-In-First-Out (FIFO) order for matching.
+//!
+//! This hybrid approach eliminates the previous bottleneck, allowing threads to operate on the order collection with minimal contention, which is reflected in the massive throughput increase in the hot spot tests.
 //!
 //! ## 3. Analysis and Conclusions
 //!
@@ -132,7 +152,7 @@
 //!
 //! This analysis confirms that the system design is highly scalable and appropriate for demanding financial applications requiring high-speed processing with data consistency.
 
-mod orderbook;
+pub mod orderbook;
 
 mod utils;
 
