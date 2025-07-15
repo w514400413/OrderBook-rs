@@ -10,6 +10,8 @@ pub mod operations;
 mod private;
 pub mod snapshot;
 mod tests;
+mod cache;
+mod pool;
 
 pub use book::OrderBook;
 pub use error::OrderBookError;
