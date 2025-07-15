@@ -1,57 +1,53 @@
-/******************************************************************************
-   Author: Joaquín Béjar García
-   Email: jb@taunais.com
-   Date: 15/7/25
-******************************************************************************/
-
 use pricelevel::OrderId;
-use std::sync::Mutex;
+use std::cell::RefCell;
 
-/// Memory pool for reusing allocations in matching operations
+/// A memory pool for reusing vectors to reduce allocations in hot paths.
+#[derive(Debug)]
 pub struct MatchingPool {
-    filled_orders_pool: Mutex<Vec<Vec<OrderId>>>,
-    price_levels_pool: Mutex<Vec<Vec<u64>>>,
+    filled_orders_pool: RefCell<Vec<Vec<OrderId>>>,
+    price_vec_pool: RefCell<Vec<Vec<u64>>>,
 }
 
 impl MatchingPool {
+    /// Creates a new, empty matching pool.
     pub fn new() -> Self {
-        Self {
-            filled_orders_pool: Mutex::new(Vec::new()),
-            price_levels_pool: Mutex::new(Vec::new()),
+        MatchingPool {
+            filled_orders_pool: RefCell::new(Vec::with_capacity(4)),
+            price_vec_pool: RefCell::new(Vec::with_capacity(4)),
         }
     }
 
+    /// Retrieves a vector for filled orders from the pool.
     pub fn get_filled_orders_vec(&self) -> Vec<OrderId> {
-        if let Ok(mut pool) = self.filled_orders_pool.try_lock() {
-            pool.pop().unwrap_or_else(|| Vec::with_capacity(16))
-        } else {
-            Vec::with_capacity(16)
-        }
+        self.filled_orders_pool
+            .borrow_mut()
+            .pop()
+            .unwrap_or_else(|| Vec::with_capacity(16))
     }
 
+    /// Returns a filled orders vector to the pool for reuse.
     pub fn return_filled_orders_vec(&self, mut vec: Vec<OrderId>) {
         vec.clear();
-        if vec.capacity() <= 64 {
-            if let Ok(mut pool) = self.filled_orders_pool.try_lock() {
-                pool.push(vec);
-            }
-        }
+        self.filled_orders_pool.borrow_mut().push(vec);
     }
 
+    /// Retrieves a vector for prices from the pool.
     pub fn get_price_vec(&self) -> Vec<u64> {
-        if let Ok(mut pool) = self.price_levels_pool.try_lock() {
-            pool.pop().unwrap_or_else(|| Vec::with_capacity(32))
-        } else {
-            Vec::with_capacity(32)
-        }
+        self.price_vec_pool
+            .borrow_mut()
+            .pop()
+            .unwrap_or_else(|| Vec::with_capacity(32))
     }
 
+    /// Returns a price vector to the pool for reuse.
     pub fn return_price_vec(&self, mut vec: Vec<u64>) {
         vec.clear();
-        if vec.capacity() <= 128 {
-            if let Ok(mut pool) = self.price_levels_pool.try_lock() {
-                pool.push(vec);
-            }
-        }
+        self.price_vec_pool.borrow_mut().push(vec);
+    }
+}
+
+impl Default for MatchingPool {
+    fn default() -> Self {
+        Self::new()
     }
 }
