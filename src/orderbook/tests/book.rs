@@ -295,7 +295,7 @@ mod tests {
         // Try to match 20 units
         let result = book.match_market_order(create_order_id(), 20, Side::Sell);
 
-        // La implementación podría no devolver un error, sino simplemente ejecutar lo que hay disponible
+        // The implementation might not return an error, but simply execute what is available
         if result.is_err() {
             // Si devuelve error, verificamos que sea el esperado
             match result {
@@ -317,7 +317,7 @@ mod tests {
             assert_eq!(match_result.remaining_quantity, 10);
             assert!(!match_result.is_complete);
 
-            // El libro ahora debería estar vacío
+            // The book should now be empty
             assert_eq!(book.best_bid(), None);
         }
     }
@@ -349,9 +349,9 @@ mod tests {
                 hidden_quantity,
                 ..
             } => {
-                // La implementación parece estar usando visible_quantity=5 después del match
+                // The implementation seems to be using visible_quantity=5 after the match
                 // We adapt the test to match the actual behavior
-                assert_eq!(visible_quantity, 5); // Algunos sistemas podrían usar refresh_amount = visible_quantity
+                assert_eq!(visible_quantity, 5); // Some systems might use refresh_amount = visible_quantity
                 assert_eq!(hidden_quantity, 80); // 90 - 10 consumed = 80
             }
             _ => panic!("Expected IcebergOrder"),

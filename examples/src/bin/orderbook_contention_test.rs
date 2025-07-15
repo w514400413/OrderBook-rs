@@ -92,7 +92,7 @@ fn test_read_write_ratio() -> Result<(), String> {
                 // Wait for synchronized start with error handling
                 let wait_result = thread_barrier.wait();
                 if wait_result.is_leader() {
-                    // El líder puede realizar alguna acción específica si es necesario
+                    // The leader can perform a specific action if necessary
                     // (no es necesario hacer nada especial en este caso)
                 }
 
@@ -192,7 +192,7 @@ fn test_read_write_ratio() -> Result<(), String> {
         // Start the test
         let start_time = Instant::now();
 
-        // Esperamos a que todos los hilos estén listos
+        // Wait for all threads to be ready
         barrier.wait();
 
         // Run for the specified duration
