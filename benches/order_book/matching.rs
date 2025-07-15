@@ -26,7 +26,7 @@ fn setup_deep_book() -> OrderBook {
 }
 
 /// Benchmark for matching a large market order that consumes a significant portion of the book.
-fn match_order_benchmark(c: &mut Criterion) {
+pub fn register_benchmarks(c: &mut Criterion) {
     let book = setup_deep_book();
 
     c.bench_function("match_order_deep_book", |b| {
@@ -44,5 +44,5 @@ fn match_order_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, match_order_benchmark);
+criterion_group!(benches, register_benchmarks);
 criterion_main!(benches);

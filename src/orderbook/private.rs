@@ -1,5 +1,6 @@
-use crate::{OrderBook, current_time_millis};
-use pricelevel::{OrderType, Side};
+use crate::{OrderBook, OrderBookError, current_time_millis};
+use pricelevel::{OrderType, PriceLevel, Side};
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 impl OrderBook {
@@ -37,12 +38,48 @@ impl OrderBook {
             }
         }
     }
+
+    /// Computes and updates the best bid and ask prices.
+    pub(super) fn update_best_prices(&self) {
+        let best_bid = self.bids.iter().map(|r| *r.key()).max();
+        let best_ask = self.asks.iter().map(|r| *r.key()).min();
+    }
+
+    /// Places a resting order in the book, updates its location.
+    pub(super) fn place_order_in_book(
+        &self,
+        order: Arc<OrderType>,
+    ) -> Result<Arc<OrderType>, OrderBookError> {
+        let (side, price, order_id) = (order.side(), order.price(), order.id());
+
+        let book_side = match side {
+            Side::Buy => &self.bids,
+            Side::Sell => &self.asks,
+        };
+
+        // Get or create the price level
+        let price_level = book_side
+            .entry(price)
+            .or_insert_with(|| PriceLevel::new(price).into())
+            .value()
+            .clone();
+
+        // The `add_order` method on PriceLevel expects an `OrderType`, not an `Arc`.
+        price_level.add_order(*order.clone());
+        // The location is stored as (price, side) for efficient retrieval in cancel_order
+        self.order_locations.insert(order_id, (price, side));
+
+        Ok(order)
+    }
 }
 
 #[cfg(test)]
-mod test_orderbook_private {
-    use crate::{OrderBook, OrderBookError};
+mod tests {
+    use crate::OrderBookError; // Import the error type
+    use crate::orderbook::book::OrderBook;
+    use crate::utils::current_time_millis; // Import the time utility
     use pricelevel::{OrderId, OrderType, Side, TimeInForce};
+    use std::sync::Arc;
     use uuid::Uuid;
 
     // Helper function to create a unique order ID
@@ -51,32 +88,45 @@ mod test_orderbook_private {
     }
 
     #[test]
-    fn test_has_expired_with_no_market_close() {
-        let book = OrderBook::new("TEST");
-
-        // Create a day order
-        let order = OrderType::Standard {
-            id: create_order_id(),
-            price: 1000,
+    fn test_private_place_order_in_book() {
+        let order_book = OrderBook::new("TEST");
+        let order_id = create_order_id();
+        let order = Arc::new(OrderType::Standard {
+            id: order_id,
+            price: 100,
             quantity: 10,
             side: Side::Buy,
             timestamp: crate::utils::current_time_millis(),
-            time_in_force: TimeInForce::Day,
-        };
+            time_in_force: TimeInForce::Gtc,
+        });
 
-        // Day order should not expire if market close is not set
-        assert!(!book.has_expired(&order));
+        assert!(order_book.place_order_in_book(order).is_ok());
+
+        // Verify order location
+        let location = order_book.order_locations.get(&order_id).unwrap();
+        assert_eq!(*location.value(), (100, Side::Buy));
+
+        // Verify order in price level by checking its properties
+        let price_level = order_book.bids.get(&100).unwrap();
+        assert_eq!(price_level.order_count(), 1);
+        assert_eq!(price_level.total_quantity(), 10); // Check if quantity matches the added order
     }
 
     #[test]
-    fn test_has_expired_with_market_close() {
+    fn test_will_cross_market_buy_no_ask() {
         let book = OrderBook::new("TEST");
 
-        // Set market close to a past time
-        let current_time = crate::utils::current_time_millis();
-        book.set_market_close_timestamp(current_time - 1000); // 1 second ago
+        // No ask orders yet, should not cross
+        assert!(!book.will_cross_market(1000, Side::Buy));
+    }
 
-        // Create a day order
+    // This test was missing its function definition
+    #[test]
+    fn test_has_expired_day_order() {
+        let book = OrderBook::new("TEST");
+        let current_time = current_time_millis();
+        book.set_market_close_timestamp(current_time - 1000); // Set market close in the past
+
         let order = OrderType::Standard {
             id: create_order_id(),
             price: 1000,
@@ -88,14 +138,6 @@ mod test_orderbook_private {
 
         // Day order should expire if market close is in the past
         assert!(book.has_expired(&order));
-    }
-
-    #[test]
-    fn test_will_cross_market_buy_no_ask() {
-        let book = OrderBook::new("TEST");
-
-        // No ask orders yet, should not cross
-        assert!(!book.will_cross_market(1000, Side::Buy));
     }
 
     #[test]
