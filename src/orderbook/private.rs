@@ -1,8 +1,6 @@
-use crate::{OrderBook, OrderBookError, current_time_millis};
+use crate::{OrderBook, current_time_millis};
 use pricelevel::{OrderType, Side};
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use tracing::trace;
 
 impl OrderBook {
     /// Check if an order has expired
@@ -40,121 +38,20 @@ impl OrderBook {
         }
     }
 
-    /// Handle immediate-or-cancel and fill-or-kill orders
-    pub(super) fn handle_immediate_order(
-        &self,
-        order: OrderType,
-    ) -> Result<Arc<OrderType>, OrderBookError> {
-        trace!(
-            "Order book {}: Handling immediate order {} at price {}",
-            self.symbol,
-            order.id(),
-            order.price()
-        );
-        let id = order.id();
-        let quantity = order.visible_quantity();
-        let side = order.side();
-        let is_fok = order.is_fill_or_kill();
-        let price = order.price();
-
-        // For FOK orders, pre-check if there's enough liquidity before attempting execution
-        if is_fok {
-            // Calculate total available liquidity at or better than the limit price
-            // Note: We pass the order's own side, not the opposite, because the method
-            // handles the side mapping internally
-            let available_liquidity = self.calculate_available_liquidity(side, Some(price));
-
-            // Check if there's enough liquidity to fully fill the order
-            if available_liquidity < quantity {
-                return Err(OrderBookError::InsufficientLiquidity {
-                    side,
-                    requested: quantity,
-                    available: available_liquidity,
-                });
-            }
-        }
-
-        // Match the order immediately
-        let match_result = self.match_market_order(id, quantity, side)?;
-
-        // For FOK orders, if not fully filled, cancel everything
-        // This is now just a safety check, as we've already pre-checked the liquidity
-        if is_fok && !match_result.is_complete {
-            return Err(OrderBookError::InsufficientLiquidity {
-                side,
-                requested: quantity,
-                available: match_result.executed_quantity(),
-            });
-        }
-
-        // For IOC orders, any remaining quantity is discarded
-        // Create an Arc for the order (even though it's not added to the book)
-        let order_arc = Arc::new(order);
-
-        // Update the last trade price if there were transactions
-        if !match_result.transactions.is_empty() {
-            let transactions = match_result.transactions.as_vec();
-            if let Some(last_transaction) = transactions.last() {
-                self.last_trade_price
-                    .store(last_transaction.price, Ordering::SeqCst);
-                self.has_traded.store(true, Ordering::SeqCst);
-            }
-        }
-
-        Ok(order_arc)
-    }
-
     /// Calculate the available liquidity for a given side at or better than a limit price
     ///
     /// For buy orders, we need to check sell orders with price <= the buy price limit
     /// For sell orders, we need to check buy orders with price >= the sell price limit
     ///
     /// Returns the total quantity available
+    #[allow(dead_code)]
+    #[deprecated]
     fn calculate_available_liquidity(&self, side: Side, price_limit: Option<u64>) -> u64 {
-        let mut total_available = 0;
-
-        match side {
-            Side::Buy => {
-                // For buy orders, look at the ask side (sell orders)
-                // Consider all sell orders with price <= the limit price
-                let mut ask_prices: Vec<u64> = self.asks.iter().map(|item| *item.key()).collect();
-                ask_prices.sort(); // Ascending order by price
-
-                for price in ask_prices {
-                    // If we've gone past the price limit, stop
-                    if let Some(limit) = price_limit {
-                        if price > limit {
-                            break;
-                        }
-                    }
-
-                    if let Some(price_level) = self.asks.get(&price) {
-                        total_available += price_level.visible_quantity();
-                    }
-                }
-            }
-            Side::Sell => {
-                // For sell orders, look at the bid side (buy orders)
-                // Consider all buy orders with price >= the limit price
-                let mut bid_prices: Vec<u64> = self.bids.iter().map(|item| *item.key()).collect();
-                bid_prices.sort_by(|a, b| b.cmp(a)); // Descending order by price
-
-                for price in bid_prices {
-                    // If we've gone past the price limit, stop
-                    if let Some(limit) = price_limit {
-                        if price < limit {
-                            break;
-                        }
-                    }
-
-                    if let Some(price_level) = self.bids.get(&price) {
-                        total_available += price_level.visible_quantity();
-                    }
-                }
-            }
-        }
-
-        total_available
+        self.peek_match(
+            side,
+            u64::MAX, // We want total liquidity, so no limit on quantity
+            price_limit,
+        )
     }
 }
 
@@ -264,73 +161,7 @@ mod test_orderbook_private {
     }
 
     #[test]
-    fn test_handle_immediate_order_fok_insufficient_liquidity() {
-        let book = OrderBook::new("TEST");
-
-        // Add a sell order with 5 quantity
-        let sell_id = create_order_id();
-        let _ = book.add_limit_order(sell_id, 1000, 5, Side::Sell, TimeInForce::Gtc);
-
-        // Create a FOK buy order with 10 quantity (more than available)
-        let buy_id = create_order_id();
-        let buy_order = OrderType::Standard {
-            id: buy_id,
-            price: 1000,
-            quantity: 10,
-            side: Side::Buy,
-            timestamp: crate::utils::current_time_millis(),
-            time_in_force: TimeInForce::Fok,
-        };
-
-        // Attempt to handle the FOK order
-        let result = book.handle_immediate_order(buy_order);
-
-        // Should fail with insufficient liquidity
-        assert!(result.is_err());
-        match result {
-            Err(OrderBookError::InsufficientLiquidity {
-                side,
-                requested,
-                available,
-            }) => {
-                assert_eq!(side, Side::Buy);
-                assert_eq!(requested, 10);
-                assert_eq!(available, 5);
-            }
-            _ => panic!("Expected InsufficientLiquidity error"),
-        }
-    }
-
-    #[test]
-    fn test_handle_immediate_order_fok_sufficient_liquidity() {
-        let book = OrderBook::new("TEST");
-
-        // Add a sell order with 10 quantity
-        let sell_id = create_order_id();
-        let _ = book.add_limit_order(sell_id, 1000, 10, Side::Sell, TimeInForce::Gtc);
-
-        // Create a FOK buy order with 10 quantity (equal to available)
-        let buy_id = create_order_id();
-        let buy_order = OrderType::Standard {
-            id: buy_id,
-            price: 1000,
-            quantity: 10,
-            side: Side::Buy,
-            timestamp: crate::utils::current_time_millis(),
-            time_in_force: TimeInForce::Fok,
-        };
-
-        // Handle the FOK order
-        let result = book.handle_immediate_order(buy_order);
-
-        // Should succeed
-        assert!(result.is_ok());
-
-        // Original sell order should be fully matched and removed
-        assert!(book.get_order(sell_id).is_none());
-    }
-
-    #[test]
+    #[allow(deprecated)]
     fn test_calculate_available_liquidity_for_buy() {
         let book = OrderBook::new("TEST");
 
@@ -360,6 +191,7 @@ mod test_orderbook_private {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_calculate_available_liquidity_for_sell() {
         let book = OrderBook::new("TEST");
 
@@ -389,80 +221,6 @@ mod test_orderbook_private {
     }
 
     #[test]
-    fn test_handle_immediate_order_ioc_partial_fill() {
-        let book = OrderBook::new("TEST");
-
-        // Add a sell order with 10 quantity
-        let sell_id = create_order_id();
-        let _ = book.add_limit_order(sell_id, 1000, 10, Side::Sell, TimeInForce::Gtc);
-
-        // Create an IOC buy order with 15 quantity (more than available)
-        let buy_id = create_order_id();
-        let buy_order = OrderType::Standard {
-            id: buy_id,
-            price: 1000,
-            quantity: 15,
-            side: Side::Buy,
-            timestamp: crate::utils::current_time_millis(),
-            time_in_force: TimeInForce::Ioc,
-        };
-
-        // Handle the IOC order
-        let result = book.handle_immediate_order(buy_order);
-
-        // Should succeed (partially filled)
-        assert!(result.is_ok());
-
-        // Original sell order should be fully matched and removed
-        assert!(book.get_order(sell_id).is_none());
-
-        // Buy order should not be in the book (IOC)
-        assert!(book.get_order(buy_id).is_none());
-
-        // Last trade price should be updated
-        assert_eq!(book.last_trade_price(), Some(1000));
-    }
-}
-
-#[cfg(test)]
-mod test_private_remaining {
-    use crate::OrderBook;
-    use pricelevel::{OrderId, OrderType, Side, TimeInForce};
-    use uuid::Uuid;
-
-    fn create_order_id() -> OrderId {
-        OrderId(Uuid::new_v4())
-    }
-
-    #[test]
-    fn test_handle_immediate_order_match_ioc_partial() {
-        let book = OrderBook::new("TEST");
-
-        // Add orders on the ask side
-        let sell_id = create_order_id();
-        let _ = book.add_limit_order(sell_id, 1000, 5, Side::Sell, TimeInForce::Gtc);
-
-        // Create an IOC order for 10 (more than available)
-        let buy_id = create_order_id();
-        let buy_order = OrderType::Standard {
-            id: buy_id,
-            price: 1000,
-            quantity: 10,
-            side: Side::Buy,
-            timestamp: crate::utils::current_time_millis(),
-            time_in_force: TimeInForce::Ioc,
-        };
-
-        // Execute the order - should partially fill
-        let result = book.handle_immediate_order(buy_order);
-        assert!(result.is_ok());
-
-        // Check trade price was set
-        assert_eq!(book.last_trade_price(), Some(1000));
-        assert!(book.has_traded.load(std::sync::atomic::Ordering::SeqCst));
-    }
-
-    #[test]
     fn test_match_market_order_partial_availability() {
         let book = OrderBook::new("TEST");
 
@@ -485,53 +243,6 @@ mod test_private_remaining {
 
         // Ask side should be empty now
         assert_eq!(book.best_ask(), None);
-    }
-}
-
-#[cfg(test)]
-mod test_private_specific {
-    use crate::{OrderBook, OrderBookError};
-    use pricelevel::{OrderId, OrderType, Side, TimeInForce};
-    use uuid::Uuid;
-
-    fn create_order_id() -> OrderId {
-        OrderId(Uuid::new_v4())
-    }
-
-    #[test]
-    fn test_handle_immediate_order_fok_validation() {
-        let book = OrderBook::new("TEST");
-
-        // Add a sell order with 5 quantity
-        let sell_id = create_order_id();
-        let _ = book.add_limit_order(sell_id, 1000, 5, Side::Sell, TimeInForce::Gtc);
-
-        // Create a FOK buy order with 10 quantity (more than available)
-        let buy_id = create_order_id();
-        let buy_order = OrderType::Standard {
-            id: buy_id,
-            price: 1000,
-            quantity: 10,
-            side: Side::Buy,
-            timestamp: crate::utils::current_time_millis(),
-            time_in_force: TimeInForce::Fok,
-        };
-
-        // Pre-check will determine there's not enough liquidity
-        let result = book.handle_immediate_order(buy_order);
-        assert!(result.is_err());
-        match result {
-            Err(OrderBookError::InsufficientLiquidity {
-                side,
-                requested,
-                available,
-            }) => {
-                assert_eq!(side, Side::Buy);
-                assert_eq!(requested, 10);
-                assert_eq!(available, 5);
-            }
-            _ => panic!("Expected InsufficientLiquidity error"),
-        }
     }
 
     #[test]

@@ -1,13 +1,14 @@
 //! OrderBook implementation for managing multiple price levels and order matching.
 
-mod book;
+pub mod book;
 mod error;
-mod operations;
-mod snapshot;
-
 mod modifications;
+mod operations;
 mod private;
+mod snapshot;
 mod tests;
+
+pub mod matching;
 
 pub use book::OrderBook;
 pub use error::OrderBookError;

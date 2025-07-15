@@ -45,9 +45,9 @@ pub enum OrderBookError {
 impl fmt::Display for OrderBookError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            OrderBookError::PriceLevelError(err) => write!(f, "Price level error: {}", err),
-            OrderBookError::OrderNotFound(id) => write!(f, "Order not found: {}", id),
-            OrderBookError::InvalidPriceLevel(price) => write!(f, "Invalid price level: {}", price),
+            OrderBookError::PriceLevelError(err) => write!(f, "Price level error: {err}"),
+            OrderBookError::OrderNotFound(id) => write!(f, "Order not found: {id}"),
+            OrderBookError::InvalidPriceLevel(price) => write!(f, "Invalid price level: {price}"),
             OrderBookError::PriceCrossing {
                 price,
                 side,
@@ -55,8 +55,7 @@ impl fmt::Display for OrderBookError {
             } => {
                 write!(
                     f,
-                    "Price crossing: {} {} would cross opposite at {}",
-                    side, price, opposite_price
+                    "Price crossing: {side} {price} would cross opposite at {opposite_price}"
                 )
             }
             OrderBookError::InsufficientLiquidity {
@@ -66,12 +65,11 @@ impl fmt::Display for OrderBookError {
             } => {
                 write!(
                     f,
-                    "Insufficient liquidity for {} order: requested {}, available {}",
-                    side, requested, available
+                    "Insufficient liquidity for {side} order: requested {requested}, available {available}"
                 )
             }
             OrderBookError::InvalidOperation { message } => {
-                write!(f, "Invalid operation: {}", message)
+                write!(f, "Invalid operation: {message}")
             }
         }
     }

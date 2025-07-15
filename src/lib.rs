@@ -132,7 +132,7 @@
 //!
 //! This analysis confirms that the system design is highly scalable and appropriate for demanding financial applications requiring high-speed processing with data consistency.
 
-mod orderbook;
+pub mod orderbook;
 
 mod utils;
 
