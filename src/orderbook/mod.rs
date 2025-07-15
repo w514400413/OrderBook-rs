@@ -4,6 +4,7 @@ pub mod book;
 pub mod error;
 pub mod matching;
 
+/// Contains the core logic for modifying the order book state, such as adding, canceling, or updating orders.
 pub mod modifications;
 pub mod operations;
 mod private;

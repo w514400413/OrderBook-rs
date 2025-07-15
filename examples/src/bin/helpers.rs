@@ -68,15 +68,15 @@ pub fn setup_orders_for_price_level_test(
     price_levels: i32,
     min_orders_per_level: i32,
 ) {
-    // Ahora recibimos un parámetro para el mínimo de órdenes por nivel
+    // Now we receive a parameter for the minimum number of orders per level
     info!(
         "Setting up orders for price level distribution test ({} levels)...",
         price_levels
     );
 
-    // Para el caso especial de 1 nivel de precio, crear muchas órdenes
+    // For the special case of 1 price level, create many orders
     let orders_per_level = if price_levels == 1 {
-        min_orders_per_level * 2 // Doble para caso especial
+        min_orders_per_level * 2 // Double for the special case
     } else {
         min_orders_per_level
     };

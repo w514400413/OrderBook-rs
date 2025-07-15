@@ -170,7 +170,7 @@ fn test_read_write_ratio() -> Result<(), String> {
 
                     local_counter += 1;
 
-                    // Agregamos un pequeño sleep para evitar que un hilo monopolice la CPU
+                    // Add a small sleep to prevent a thread from monopolizing the CPU
                     if local_counter % 1000 == 0 {
                         thread::sleep(Duration::from_micros(1));
                     }
@@ -204,7 +204,7 @@ fn test_read_write_ratio() -> Result<(), String> {
         // Wait for all threads to finish (with timeout)
         let mut total_ops = 0;
         for (i, handle) in handles.into_iter().enumerate() {
-            // Establecemos un timeout para el join de cada hilo
+            // Set a timeout for each thread's join
             match handle.join() {
                 Ok(count) => {
                     total_ops += count;
@@ -326,7 +326,7 @@ fn test_hot_spot_contention() -> Result<(), String> {
 
                     local_counter += 1;
 
-                    // Pequeño sleep para evitar monopolización de CPU
+                    // Small sleep to prevent CPU monopolization
                     if local_counter % 1000 == 0 {
                         thread::sleep(Duration::from_micros(1));
                     }

@@ -350,7 +350,7 @@ mod tests {
                 ..
             } => {
                 // La implementación parece estar usando visible_quantity=5 después del match
-                // Adaptamos el test para que coincida con el comportamiento real
+                // We adapt the test to match the actual behavior
                 assert_eq!(visible_quantity, 5); // Algunos sistemas podrían usar refresh_amount = visible_quantity
                 assert_eq!(hidden_quantity, 80); // 90 - 10 consumed = 80
             }

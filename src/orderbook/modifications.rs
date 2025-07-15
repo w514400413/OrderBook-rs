@@ -413,7 +413,7 @@ impl OrderBook {
         &self,
         order_id: OrderId,
     ) -> Result<Option<Arc<OrderType>>, OrderBookError> {
-        // Primero encontramos la ubicación de la orden (precio y lado) sin bloquear
+        // First, we find the order's location (price and side) without locking
         let location = self.order_locations.get(&order_id).map(|val| *val);
 
         if let Some((price, side)) = location {
@@ -423,29 +423,29 @@ impl OrderBook {
                 Side::Sell => &self.asks,
             };
 
-            // Crear la actualización para cancelar
+            // Create the update to cancel
             let update = OrderUpdate::Cancel { order_id };
 
-            // Utilizar entry() para modificar el nivel de precio de manera segura
+            // Use entry() to safely modify the price level
             let mut result = None;
             let mut empty_level = false;
 
             price_levels.entry(price).and_modify(|price_level| {
-                // Intentar cancelar la orden
+                // Try to cancel the order
                 if let Ok(cancelled) = price_level.update_order(update) {
                     result = cancelled;
 
-                    // Verificar si el nivel quedó vacío
+                    // Check if the level became empty
                     empty_level = price_level.order_count() == 0;
                 }
             });
 
-            // Si obtuvimos un resultado y la orden fue cancelada
+            // If we got a result and the order was canceled
             if result.is_some() {
-                // Eliminar la orden del mapa de ubicaciones
+                // Remove the order from the locations map
                 self.order_locations.remove(&order_id);
 
-                // Si el nivel quedó vacío, eliminarlo
+                // If the level became empty, remove it
                 if empty_level {
                     price_levels.remove(&price);
                 }
@@ -453,7 +453,7 @@ impl OrderBook {
 
             Ok(result)
         } else {
-            // La orden no se encontró
+            // The order was not found
             Ok(None)
         }
     }
