@@ -10,7 +10,7 @@
 //!
 //! - **Thread-Safe Price Levels**: Each price level can be independently and concurrently modified by multiple threads without blocking.
 //!
-//! - **Advanced Order Matching**: Efficient matching algorithm that correctly handles complex order types and partial fills.
+//! - **Advanced Order Matching**: Efficient matching algorithm for both market and limit orders, correctly handling complex order types and partial fills.
 //!
 //! - **Performance Metrics**: Built-in statistics tracking for benchmarking and monitoring system performance.
 //!
@@ -32,8 +32,16 @@
 //! - **Research**: Platform for studying market microstructure and order flow
 //! - **Educational**: Reference implementation for understanding modern exchange architecture
 //!
-//! ## Status
+//! ## What's New in Version 0.2.0
 //!
+//! This version introduces significant performance optimizations and architectural improvements:
+//!
+//! - **Performance Boost**: Reintroduced `PriceLevelCache` for faster best bid/ask lookups and a `MatchingPool` to reduce memory allocations in the matching engine, leading to lower latency.
+//! - **Cleaner Architecture**: Refactored modification and matching logic for better separation of concerns and maintainability.
+//! - **Enhanced Concurrency**: Improved thread-safe operations, ensuring robustness under heavy load.
+//! - **Improved Documentation**: All code comments have been translated to English, and crate-level documentation has been expanded for clarity.
+//!
+//! ## Status
 //! This project is currently in active development and is not yet suitable for production use.
 //!
 //! # Performance Analysis of the OrderBook System
@@ -55,24 +63,24 @@
 //!
 //! | Metric | Total Operations | Operations/Second |
 //! |---------|---------------------|---------------------|
-//! | Orders Added | 587,937 | 117,563.67 |
-//! | Orders Matched | 324,096 | 64,806.12 |
-//! | Orders Cancelled | 4,063,600 | 812,555.98 |
-//! | **Total Operations** | **4,975,633** | **994,925.77** |
+//! | Orders Added | 559,266 | 111,844.44 |
+//! | Orders Matched | 330,638 | 66,122.42 |
+//! | Orders Cancelled | 4,106,360 | 821,207.71 |
+//! | **Total Operations** | **4,996,264** | **999,174.58** |
 //!
 //! ### Initial vs. Final OrderBook State
 //!
 //! | Metric | Initial State | Final State |
 //! |---------|----------------|--------------|
-//! | Best Bid | 9,900 | 9,840 |
-//! | Best Ask | 10,000 | 10,110 |
-//! | Spread | 100 | 270 |
-//! | Mid Price | 9,950.00 | 9,975.00 |
-//! | Total Orders | 1,020 | 87,155 |
-//! | Bid Price Levels | 21 | 10 |
-//! | Ask Price Levels | 21 | 6 |
-//! | Total Bid Quantity | 7,750 | 688,791 |
-//! | Total Ask Quantity | 7,750 | 912,992 |
+//! | Best Bid | 9,900 | 9,880 |
+//! | Best Ask | 10,000 | 10,050 |
+//! | Spread | 100 | 170 |
+//! | Mid Price | 9,950.00 | 9,965.00 |
+//! | Total Orders | 1,020 | 138,295 |
+//! | Bid Price Levels | 21 | 11 |
+//! | Ask Price Levels | 21 | 11 |
+//! | Total Bid Quantity | 7,750 | 1,037,923 |
+//! | Total Ask Quantity | 7,750 | 1,488,201 |
 //!
 //! ## 2. Contention Pattern Tests
 //!
