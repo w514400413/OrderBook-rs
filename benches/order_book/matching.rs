@@ -1,6 +1,7 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use orderbook_rs::orderbook::book::OrderBook;
 use pricelevel::{OrderId, OrderType, Side, TimeInForce};
+use std::hint::black_box;
 
 /// Sets up a deep order book for benchmarking.
 /// Populates the book with a significant number of orders on the ask side.

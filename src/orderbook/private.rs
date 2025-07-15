@@ -39,13 +39,8 @@ impl OrderBook {
         }
     }
 
-    /// Computes and updates the best bid and ask prices.
-    pub(super) fn update_best_prices(&self) {
-        let best_bid = self.bids.iter().map(|r| *r.key()).max();
-        let best_ask = self.asks.iter().map(|r| *r.key()).min();
-    }
-
     /// Places a resting order in the book, updates its location.
+    #[allow(dead_code)]
     pub(super) fn place_order_in_book(
         &self,
         order: Arc<OrderType>,

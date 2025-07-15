@@ -3,6 +3,7 @@
 pub mod book;
 pub mod error;
 pub mod matching;
+
 pub mod modifications;
 pub mod operations;
 mod private;
