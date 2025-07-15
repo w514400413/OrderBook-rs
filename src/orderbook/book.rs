@@ -1,5 +1,6 @@
 //! Core OrderBook implementation for managing price levels and orders
 
+use super::cache::PriceLevelCache;
 use super::error::OrderBookError;
 use super::snapshot::OrderBookSnapshot;
 use crate::utils::current_time_millis;
@@ -43,6 +44,9 @@ pub struct OrderBook {
 
     /// Flag indicating if market close is set
     pub(super) has_market_close: AtomicBool,
+
+    /// A cache for storing best bid/ask prices to avoid recalculation
+    pub(super) cache: PriceLevelCache,
 }
 
 impl OrderBook {
@@ -61,6 +65,7 @@ impl OrderBook {
             has_traded: AtomicBool::new(false),
             market_close_timestamp: AtomicU64::new(0),
             has_market_close: AtomicBool::new(false),
+            cache: PriceLevelCache::new(),
         }
     }
 
@@ -87,30 +92,26 @@ impl OrderBook {
 
     /// Get the best bid price, if any
     pub fn best_bid(&self) -> Option<u64> {
-        let mut best_price = None;
-
-        // Find the highest price in bids
-        for item in self.bids.iter() {
-            let price = *item.key();
-            if best_price.is_none() || price > best_price.unwrap() {
-                best_price = Some(price);
-            }
+        if let Some(cached_bid) = self.cache.get_cached_best_bid() {
+            return Some(cached_bid);
         }
+
+        let best_price = self.bids.iter().map(|item| *item.key()).max();
+
+        self.cache.update_best_prices(best_price, None);
 
         best_price
     }
 
     /// Get the best ask price, if any
     pub fn best_ask(&self) -> Option<u64> {
-        let mut best_price = None;
-
-        // Find the lowest price in asks
-        for item in self.asks.iter() {
-            let price = *item.key();
-            if best_price.is_none() || price < best_price.unwrap() {
-                best_price = Some(price);
-            }
+        if let Some(cached_ask) = self.cache.get_cached_best_ask() {
+            return Some(cached_ask);
         }
+
+        let best_price = self.asks.iter().map(|item| *item.key()).min();
+
+        self.cache.update_best_prices(None, best_price);
 
         best_price
     }

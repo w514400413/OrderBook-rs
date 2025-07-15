@@ -108,6 +108,7 @@ impl OrderBook {
         &self,
         update: OrderUpdate,
     ) -> Result<Option<Arc<OrderType>>, OrderBookError> {
+        self.cache.invalidate();
         trace!("Order book {}: Updating order {:?}", self.symbol, update);
         match update {
             OrderUpdate::UpdatePrice {
@@ -188,6 +189,7 @@ impl OrderBook {
                             result = updated_order;
                             is_empty = price_level.order_count() == 0;
                         }
+                        self.cache.invalidate();
                     });
 
                     // If the price level is now empty, remove it
@@ -413,6 +415,7 @@ impl OrderBook {
         &self,
         order_id: OrderId,
     ) -> Result<Option<Arc<OrderType>>, OrderBookError> {
+        self.cache.invalidate();
         // First, we find the order's location (price and side) without locking
         let location = self.order_locations.get(&order_id).map(|val| *val);
 
@@ -440,6 +443,7 @@ impl OrderBook {
                 }
             });
 
+            self.cache.invalidate();
             // If we got a result and the order was canceled
             if result.is_some() {
                 // Remove the order from the locations map
@@ -460,6 +464,8 @@ impl OrderBook {
 
     /// Add a new order to the book, automatically matching it if it's aggressive.
     pub fn add_order(&self, mut order: OrderType) -> Result<Arc<OrderType>, OrderBookError> {
+        self.cache.invalidate();
+
         trace!(
             "Order book {}: Adding order {} at price {}",
             self.symbol,
@@ -498,6 +504,7 @@ impl OrderBook {
             }
         }
 
+        self.cache.invalidate();
         // Attempt to match the order immediately
         let match_result = self.match_order(
             order.id(),

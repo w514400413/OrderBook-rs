@@ -1,12 +1,11 @@
 //! Contains the core matching engine logic for the order book.
 
+use crate::orderbook::pool::MatchingPool;
 use crate::{OrderBook, OrderBookError};
 use pricelevel::{MatchResult, OrderId, Side};
 use std::sync::atomic::Ordering;
-use crate::orderbook::pool::MatchingPool;
 
 impl OrderBook {
-
     /// Highly optimized internal matching function
     pub fn match_order(
         &self,
@@ -15,6 +14,7 @@ impl OrderBook {
         quantity: u64,
         limit_price: Option<u64>,
     ) -> Result<MatchResult, OrderBookError> {
+        self.cache.invalidate();
         let mut match_result = MatchResult::new(order_id, quantity);
         let mut remaining_quantity = quantity;
 
@@ -72,7 +72,7 @@ impl OrderBook {
             }
 
             // Try to get the price level, skip if removed by another thread
-            let price_level_entry = match match_side.get_mut(&price) {
+            let mut price_level_entry = match match_side.get_mut(&price) {
                 Some(entry) => entry,
                 None => continue,
             };
@@ -218,7 +218,7 @@ impl OrderBook {
     /// Batch operation for multiple order matches (additional optimization)
     pub fn match_orders_batch(
         &self,
-        orders: &[(OrderId, Side, u64, Option<u64>)]
+        orders: &[(OrderId, Side, u64, Option<u64>)],
     ) -> Vec<Result<MatchResult, OrderBookError>> {
         let mut results = Vec::with_capacity(orders.len());
 
@@ -230,5 +230,3 @@ impl OrderBook {
         results
     }
 }
-
-
