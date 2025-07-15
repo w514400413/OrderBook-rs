@@ -11,6 +11,9 @@ pub enum OrderBookError {
 
     /// Order not found in the book
     OrderNotFound(String),
+    PriceLevelNotFound(u64),
+    OrderExpired,
+    InvalidReplaceOrder,
 
     /// Invalid price level
     InvalidPriceLevel(u64),
@@ -47,6 +50,11 @@ impl fmt::Display for OrderBookError {
         match self {
             OrderBookError::PriceLevelError(err) => write!(f, "Price level error: {err}"),
             OrderBookError::OrderNotFound(id) => write!(f, "Order not found: {id}"),
+            OrderBookError::PriceLevelNotFound(price) => {
+                write!(f, "Price level not found: {price}")
+            }
+            OrderBookError::OrderExpired => write!(f, "Order has expired"),
+            OrderBookError::InvalidReplaceOrder => write!(f, "The replacement order is invalid"),
             OrderBookError::InvalidPriceLevel(price) => write!(f, "Invalid price level: {price}"),
             OrderBookError::PriceCrossing {
                 price,

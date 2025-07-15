@@ -135,4 +135,52 @@ mod tests {
             102
         );
     }
+
+    #[test]
+    fn test_peek_match_buy_side_full_match() {
+        let book = OrderBook::new("TEST");
+        book.add_limit_order(OrderId::new(), 101, 10, Side::Sell, TimeInForce::Gtc)
+            .unwrap();
+        book.add_limit_order(OrderId::new(), 102, 5, Side::Sell, TimeInForce::Gtc)
+            .unwrap();
+
+        // Request 15, which is fully available (10 at 101, 5 at 102)
+        let matched_quantity = book.peek_match(Side::Buy, 15, None);
+        assert_eq!(matched_quantity, 15);
+    }
+
+    #[test]
+    fn test_peek_match_buy_side_partial_match() {
+        let book = OrderBook::new("TEST");
+        book.add_limit_order(OrderId::new(), 101, 10, Side::Sell, TimeInForce::Gtc)
+            .unwrap();
+
+        // Request 20, but only 10 is available
+        let matched_quantity = book.peek_match(Side::Buy, 20, None);
+        assert_eq!(matched_quantity, 10);
+    }
+
+    #[test]
+    fn test_peek_match_sell_side_with_price_limit() {
+        let book = OrderBook::new("TEST");
+        book.add_limit_order(OrderId::new(), 98, 10, Side::Buy, TimeInForce::Gtc)
+            .unwrap();
+        book.add_limit_order(OrderId::new(), 99, 5, Side::Buy, TimeInForce::Gtc)
+            .unwrap();
+        book.add_limit_order(OrderId::new(), 100, 20, Side::Buy, TimeInForce::Gtc)
+            .unwrap();
+
+        // Request to sell with a limit of 99. Should only match with bids at 99 and 100.
+        let matched_quantity = book.peek_match(Side::Sell, 50, Some(99));
+        assert_eq!(matched_quantity, 25); // 5 at 99 + 20 at 100
+    }
+
+    #[test]
+    fn test_peek_match_no_liquidity() {
+        let book = OrderBook::new("TEST");
+
+        // No orders in the book
+        let matched_quantity = book.peek_match(Side::Buy, 10, None);
+        assert_eq!(matched_quantity, 0);
+    }
 }

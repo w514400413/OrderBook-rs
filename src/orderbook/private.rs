@@ -37,22 +37,6 @@ impl OrderBook {
             }
         }
     }
-
-    /// Calculate the available liquidity for a given side at or better than a limit price
-    ///
-    /// For buy orders, we need to check sell orders with price <= the buy price limit
-    /// For sell orders, we need to check buy orders with price >= the sell price limit
-    ///
-    /// Returns the total quantity available
-    #[allow(dead_code)]
-    #[deprecated]
-    fn calculate_available_liquidity(&self, side: Side, price_limit: Option<u64>) -> u64 {
-        self.peek_match(
-            side,
-            u64::MAX, // We want total liquidity, so no limit on quantity
-            price_limit,
-        )
-    }
 }
 
 #[cfg(test)]
@@ -158,66 +142,6 @@ mod test_orderbook_private {
 
         // Sell at 1001 should not cross
         assert!(!book.will_cross_market(1001, Side::Sell));
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_calculate_available_liquidity_for_buy() {
-        let book = OrderBook::new("TEST");
-
-        // Add sell orders at different price levels
-        let id1 = create_order_id();
-        let _ = book.add_limit_order(id1, 1000, 10, Side::Sell, TimeInForce::Gtc);
-
-        let id2 = create_order_id();
-        let _ = book.add_limit_order(id2, 1010, 15, Side::Sell, TimeInForce::Gtc);
-
-        let id3 = create_order_id();
-        let _ = book.add_limit_order(id3, 990, 5, Side::Sell, TimeInForce::Gtc);
-
-        // Calculate liquidity for buy side with price limit
-        let liquidity = book.calculate_available_liquidity(Side::Buy, Some(1000));
-
-        // Should include orders at 1000 and below
-        assert_eq!(liquidity, 15); // 10 + 5
-
-        // Calculate liquidity with higher price limit
-        let liquidity = book.calculate_available_liquidity(Side::Buy, Some(1010));
-        assert_eq!(liquidity, 30); // 10 + 5 + 15
-
-        // Calculate liquidity with no price limit
-        let liquidity = book.calculate_available_liquidity(Side::Buy, None);
-        assert_eq!(liquidity, 30); // All orders
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_calculate_available_liquidity_for_sell() {
-        let book = OrderBook::new("TEST");
-
-        // Add buy orders at different price levels
-        let id1 = create_order_id();
-        let _ = book.add_limit_order(id1, 1000, 10, Side::Buy, TimeInForce::Gtc);
-
-        let id2 = create_order_id();
-        let _ = book.add_limit_order(id2, 1010, 15, Side::Buy, TimeInForce::Gtc);
-
-        let id3 = create_order_id();
-        let _ = book.add_limit_order(id3, 990, 5, Side::Buy, TimeInForce::Gtc);
-
-        // Calculate liquidity for sell side with price limit
-        let liquidity = book.calculate_available_liquidity(Side::Sell, Some(1000));
-
-        // Should include orders at 1000 and above
-        assert_eq!(liquidity, 25); // 10 + 15
-
-        // Calculate liquidity with lower price limit
-        let liquidity = book.calculate_available_liquidity(Side::Sell, Some(990));
-        assert_eq!(liquidity, 30); // 10 + 15 + 5
-
-        // Calculate liquidity with no price limit
-        let liquidity = book.calculate_available_liquidity(Side::Sell, None);
-        assert_eq!(liquidity, 30); // All orders
     }
 
     #[test]
