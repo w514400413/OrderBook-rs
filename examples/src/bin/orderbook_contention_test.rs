@@ -480,83 +480,64 @@ fn test_price_level_distribution() -> Result<(), String> {
                 let mut local_counter = 0u64;
 
                 while thread_running.load(Ordering::Relaxed) {
-                    // Mix of read and write operations, with more reads to avoid depleting liquidity
-                    match local_counter % 10 {
-                        0 => {
-                            // Add a buy limit order
-                            let id = OrderId(Uuid::new_v4());
-                            let level = (local_counter % max_level as u64) as usize;
-                            let price = 10000 - level as u64 * 10;
+                    let op_type = local_counter % 20; // Increase diversity of operations
+
+                    match op_type {
+                        // --- Write Operations --- (Yield after each)
+                        0 | 1 => {
+                            // Add limit buy/sell
+                            let side = if op_type == 0 { Side::Buy } else { Side::Sell };
+                            let price = if side == Side::Buy {
+                                10000 - (local_counter % max_level as u64) as u64 * 10
+                            } else {
+                                10100 + (local_counter % max_level as u64) as u64 * 10
+                            };
                             let _ = thread_book.add_limit_order(
-                                id,
+                                OrderId(Uuid::new_v4()),
                                 price,
                                 10,
-                                Side::Buy,
+                                side,
                                 TimeInForce::Gtc,
                             );
+                            std::thread::yield_now(); // Aggressively yield after write
                         }
-                        1 => {
-                            // Add a sell limit order
-                            let id = OrderId(Uuid::new_v4());
-                            let level = (local_counter % max_level as u64) as usize;
-                            let price = 10100 + level as u64 * 10;
-                            let _ = thread_book.add_limit_order(
-                                id,
-                                price,
-                                10,
-                                Side::Sell,
-                                TimeInForce::Gtc,
-                            );
+                        2 | 3 => {
+                            // Submit market buy/sell
+                            let side = if op_type == 2 { Side::Buy } else { Side::Sell };
+                            let _ =
+                                thread_book.submit_market_order(OrderId(Uuid::new_v4()), 1, side);
+                            std::thread::yield_now(); // Aggressively yield after write
                         }
-                        2 => {
-                            // Submit a small market buy order
-                            let id = OrderId(Uuid::new_v4());
-                            let _ = thread_book.submit_market_order(id, 1, Side::Buy);
-                        }
-                        3 => {
-                            // Submit a small market sell order
-                            let id = OrderId(Uuid::new_v4());
-                            let _ = thread_book.submit_market_order(id, 1, Side::Sell);
-                        }
-                        // The rest are read operations
                         4 => {
-                            // Best bid/ask
+                            // Cancel order
+                            let id = OrderId::from_u64(local_counter % 1000);
+                            let _ = thread_book.cancel_order(id);
+                            std::thread::yield_now(); // Aggressively yield after write
+                        }
+
+                        // --- Read Operations --- (No yield needed)
+                        5 | 6 => {
                             let _ = thread_book.best_bid();
+                        }
+                        7 | 8 => {
                             let _ = thread_book.best_ask();
                         }
-                        5 => {
-                            // Spread and mid price
+                        9 | 10 => {
                             let _ = thread_book.spread();
+                        }
+                        11 | 12 => {
                             let _ = thread_book.mid_price();
                         }
-                        6 => {
-                            // Create a snapshot
+                        13 | 14 => {
                             let _ = thread_book.create_snapshot(5);
                         }
-                        7 => {
-                            // Get volume by price
-                            let _ = thread_book.get_volume_by_price();
-                        }
-                        8 => {
-                            // Look up an order
-                            let id = OrderId::from_u64(local_counter % 1000);
-                            let _ = thread_book.get_order(id);
-                        }
                         _ => {
-                            // Cancel an order (infrequently)
-                            if local_counter % 50 == 0 {
-                                let id = OrderId::from_u64(local_counter % 1000);
-                                let _ = thread_book.cancel_order(id);
-                            }
+                            // Default to a less intensive operation or a small sleep
+                            thread::sleep(Duration::from_micros(5));
                         }
                     }
 
                     local_counter += 1;
-
-                    // Small sleep to avoid monopolizing CPU
-                    if local_counter % 500 == 0 {
-                        thread::sleep(Duration::from_micros(1));
-                    }
                 }
 
                 // Update the operation counter

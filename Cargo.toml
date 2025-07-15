@@ -28,13 +28,12 @@ include = [
 ]
 
 [dependencies]
-tracing = "0.1"
-serde = { version = "1.0", features = ["derive"] }
-uuid = { version = "1.17", features = ["v4", "v5", "serde"] }
-pricelevel = "0.1"
-dashmap = "6.1"
-serde_json = "1.0"
-
+tracing = { workspace = true }
+uuid = { workspace = true }
+pricelevel = { workspace = true }
+dashmap = { workspace = true }
+serde_json = { workspace = true }
+serde = { workspace = true }
 
 [dev-dependencies]
 criterion = { version = "0.6", features = ["html_reports"] }
@@ -62,3 +61,8 @@ members = [
 [workspace.dependencies]
 orderbook-rs = { path = "." }
 tracing = "0.1.41"
+pricelevel = "0.2"
+uuid = { version = "1.17", features = ["v4", "v5", "serde"] }
+dashmap = "6.1"
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }

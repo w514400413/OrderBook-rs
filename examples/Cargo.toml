@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-orderbook-rs = { path = ".." }
-tracing = "0.1"
-uuid = { version = "1.17", features = ["v4"] }
-pricelevel = "0.1"
+orderbook-rs = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+pricelevel = { workspace = true }
