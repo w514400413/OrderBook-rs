@@ -513,6 +513,12 @@ impl OrderBook {
             Some(order.price()),
         )?;
 
+        if !match_result.transactions.transactions.is_empty() {
+            if let Some(ref listener) = self.trade_listener {
+                listener(&match_result) // emit trade events to listener
+            }
+        }
+
         // If the order was not fully filled, add the remainder to the book
         if match_result.remaining_quantity > 0 {
             if order.is_immediate() {
