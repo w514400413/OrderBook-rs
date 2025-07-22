@@ -457,10 +457,7 @@ impl OrderBook {
 
             Ok(result)
         } else {
-            // The order was not found
-            Err(OrderBookError::OrderNotFound(String::from(
-                "order not found",
-            )))
+            Ok(None)
         }
     }
 
