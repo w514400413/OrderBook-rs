@@ -52,6 +52,7 @@ pub struct OrderBook {
     pub trade_listener: Option<TradeListener>,
 }
 
+/// trade listener specification
 pub type TradeListener = fn(&MatchResult);
 
 impl OrderBook {
@@ -75,6 +76,7 @@ impl OrderBook {
         }
     }
 
+    /// Create a new order book for the given symbol with a trade listner
     pub fn with_trade_listener(symbol: &str, trade_listener: TradeListener) -> Self {
         let namespace = Uuid::new_v4();
 
