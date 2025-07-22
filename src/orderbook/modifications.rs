@@ -457,7 +457,6 @@ impl OrderBook {
 
             Ok(result)
         } else {
-            // The order was not found
             Ok(None)
         }
     }
@@ -512,6 +511,12 @@ impl OrderBook {
             order.total_quantity(), // Use total quantity for matching
             Some(order.price()),
         )?;
+
+        if !match_result.transactions.transactions.is_empty() {
+            if let Some(ref listener) = self.trade_listener {
+                listener(&match_result) // emit trade events to listener
+            }
+        }
 
         // If the order was not fully filled, add the remainder to the book
         if match_result.remaining_quantity > 0 {

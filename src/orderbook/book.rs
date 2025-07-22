@@ -47,7 +47,13 @@ pub struct OrderBook {
 
     /// A cache for storing best bid/ask prices to avoid recalculation
     pub(super) cache: PriceLevelCache,
+
+    /// listens to possible trades when an order is added
+    pub trade_listener: Option<TradeListener>,
 }
+
+/// trade listener specification
+pub type TradeListener = fn(&MatchResult);
 
 impl OrderBook {
     /// Create a new order book for the given symbol
@@ -66,6 +72,26 @@ impl OrderBook {
             market_close_timestamp: AtomicU64::new(0),
             has_market_close: AtomicBool::new(false),
             cache: PriceLevelCache::new(),
+            trade_listener: None,
+        }
+    }
+
+    /// Create a new order book for the given symbol with a trade listner
+    pub fn with_trade_listener(symbol: &str, trade_listener: TradeListener) -> Self {
+        let namespace = Uuid::new_v4();
+
+        Self {
+            symbol: symbol.to_string(),
+            bids: DashMap::new(),
+            asks: DashMap::new(),
+            order_locations: DashMap::new(),
+            transaction_id_generator: UuidGenerator::new(namespace),
+            last_trade_price: AtomicU64::new(0),
+            has_traded: AtomicBool::new(false),
+            market_close_timestamp: AtomicU64::new(0),
+            has_market_close: AtomicBool::new(false),
+            cache: PriceLevelCache::new(),
+            trade_listener: Some(trade_listener),
         }
     }
 
