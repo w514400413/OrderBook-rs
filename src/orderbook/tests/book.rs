@@ -311,7 +311,8 @@ mod tests {
                 _ => panic!("Unexpected error type"),
             }
         } else {
-            // Si no devuelve error, verificamos que se haya ejecutado parcialmente
+            // If it doesn't return an error, we verify that it has been executed partially
+            #[allow(clippy::unnecessary_unwrap)]
             let match_result = result.unwrap();
             assert_eq!(match_result.executed_quantity(), 10);
             assert_eq!(match_result.remaining_quantity, 10);
