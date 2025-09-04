@@ -23,18 +23,10 @@ impl OrderBook {
     pub(super) fn will_cross_market(&self, price: u64, side: Side) -> bool {
         match side {
             Side::Buy => {
-                if let Some(best_ask) = self.best_ask() {
-                    price >= best_ask
-                } else {
-                    false
-                }
+                self.best_ask().map_or(false, |best_ask| price >= best_ask)
             }
             Side::Sell => {
-                if let Some(best_bid) = self.best_bid() {
-                    price <= best_bid
-                } else {
-                    false
-                }
+                self.best_bid().map_or(false, |best_bid| price <= best_bid)
             }
         }
     }
