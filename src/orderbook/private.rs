@@ -22,12 +22,8 @@ impl OrderBook {
     /// Check if there would be a price crossing
     pub(super) fn will_cross_market(&self, price: u64, side: Side) -> bool {
         match side {
-            Side::Buy => {
-                self.best_ask().is_some_and(|best_ask| price >= best_ask)
-            }
-            Side::Sell => {
-                self.best_bid().is_some_and(|best_bid| price <= best_bid)
-            }
+            Side::Buy => self.best_ask().is_some_and(|best_ask| price >= best_ask),
+            Side::Sell => self.best_bid().is_some_and(|best_bid| price <= best_bid),
         }
     }
 
