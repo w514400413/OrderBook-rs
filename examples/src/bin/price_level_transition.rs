@@ -15,7 +15,7 @@ const SYMBOL: &str = "TEST/USD";
 fn main() {
     setup_logger();
     info!("Price Level Transition Test");
-    info!("=========================");
+    info!("===========================");
 
     // Try two different price level configurations
     let test_cases = [100, 5]; // Test with 100 levels, then 5 levels
