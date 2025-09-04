@@ -15,7 +15,7 @@ const SYMBOL: &str = "TEST/USD";
 fn main() {
     setup_logger();
     info!("Price Level Distribution Debug Test");
-    info!("=================================");
+    info!("===================================");
 
     // Only test the problematic case
     let price_levels = 100; // Test with 100 price levels, like the last successful case
