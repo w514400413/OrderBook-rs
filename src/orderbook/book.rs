@@ -64,7 +64,7 @@ where
     T: Default + Clone + Send + Sync + 'static,
 {
     /// Convert OrderType<()> to `OrderType<T>` for return values
-    pub(crate) fn convert_from_unit_type(&self, order: &OrderType<()>) -> OrderType<T>
+    pub fn convert_from_unit_type(&self, order: &OrderType<()>) -> OrderType<T>
     where
         T: Default,
     {

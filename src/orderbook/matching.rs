@@ -159,7 +159,7 @@ where
     }
 
     /// Optimized peek match with memory pooling
-    pub(super) fn peek_match(&self, side: Side, quantity: u64, price_limit: Option<u64>) -> u64 {
+    pub fn peek_match(&self, side: Side, quantity: u64, price_limit: Option<u64>) -> u64 {
         let price_levels = match side {
             Side::Buy => &self.asks,
             Side::Sell => &self.bids,

@@ -520,7 +520,7 @@ where
                 return Err(OrderBookError::InsufficientLiquidity {
                     side: order.side(),
                     requested: order.quantity(), // Now uses the trait method
-                    available: order.quantity() - match_result.remaining_quantity,
+                    available: order.quantity().saturating_sub(match_result.remaining_quantity),
                 });
             }
 

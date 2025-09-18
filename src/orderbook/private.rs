@@ -8,7 +8,7 @@ where
     T: Clone + Send + Sync + Default + 'static,
 {
     /// Check if an order has expired
-    pub(super) fn has_expired(&self, order: &OrderType<T>) -> bool {
+    pub fn has_expired(&self, order: &OrderType<T>) -> bool {
         let time_in_force = order.time_in_force();
         let current_time = current_time_millis();
 
@@ -23,7 +23,7 @@ where
     }
 
     /// Check if there would be a price crossing
-    pub(super) fn will_cross_market(&self, price: u64, side: Side) -> bool {
+    pub fn will_cross_market(&self, price: u64, side: Side) -> bool {
         match side {
             Side::Buy => OrderBook::<T>::best_ask(self).is_some_and(|best_ask| price >= best_ask),
             Side::Sell => OrderBook::<T>::best_bid(self).is_some_and(|best_bid| price <= best_bid),
@@ -32,7 +32,7 @@ where
 
     /// Places a resting order in the book, updates its location.
     #[allow(dead_code)]
-    pub(super) fn place_order_in_book(
+    pub fn place_order_in_book(
         &self,
         order: Arc<OrderType<T>>,
     ) -> Result<Arc<OrderType<T>>, OrderBookError> {
@@ -60,7 +60,7 @@ where
     }
 
     /// Convert `OrderType<T>` to OrderType<()> for compatibility with current PriceLevel API
-    pub(crate) fn convert_to_unit_type(&self, order: &OrderType<T>) -> OrderType<()> {
+    pub fn convert_to_unit_type(&self, order: &OrderType<T>) -> OrderType<()> {
         match order {
             OrderType::Standard {
                 id,
