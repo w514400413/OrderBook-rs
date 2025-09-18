@@ -5,7 +5,10 @@ use crate::{OrderBook, OrderBookError};
 use pricelevel::{MatchResult, OrderId, Side};
 use std::sync::atomic::Ordering;
 
-impl OrderBook {
+impl<T> OrderBook<T>
+where
+    T: Clone + Send + Sync + Default + 'static,
+{
     /// Highly optimized internal matching function
     pub fn match_order(
         &self,
@@ -223,7 +226,7 @@ impl OrderBook {
         let mut results = Vec::with_capacity(orders.len());
 
         for &(order_id, side, quantity, limit_price) in orders {
-            let result = self.match_order(order_id, side, quantity, limit_price);
+            let result = OrderBook::<T>::match_order(self, order_id, side, quantity, limit_price);
             results.push(result);
         }
 
