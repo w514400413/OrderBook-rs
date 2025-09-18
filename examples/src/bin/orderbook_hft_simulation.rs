@@ -1,5 +1,6 @@
 use orderbook_rs::OrderBook;
 use pricelevel::{OrderId, Side, TimeInForce, setup_logger};
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Barrier, Mutex};
@@ -21,6 +22,14 @@ const BASE_BID_PRICE: u64 = 9900;
 const BASE_ASK_PRICE: u64 = 10000;
 const PRICE_LEVELS: u64 = 20;
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct OrderMetadata {
+    pub client_id: Uuid,
+    pub user_id: Uuid,
+    pub exchange_id: Uuid,
+    pub priority: u8,
+}
+
 fn main() {
     // Set up logging
     setup_logger();
@@ -34,7 +43,7 @@ fn main() {
     );
 
     // Create a shared order book
-    let order_book = Arc::new(OrderBook::new(SYMBOL));
+    let order_book: Arc<OrderBook<OrderMetadata>> = Arc::new(OrderBook::new(SYMBOL));
 
     // Shared queue to store order IDs for cancellation
     let order_id_queue = Arc::new(Mutex::new(VecDeque::<OrderId>::new()));
@@ -161,16 +170,28 @@ fn main() {
     print_order_book_state(&order_book);
 }
 
-fn preload_order_book(order_book: &OrderBook, count: usize) {
+fn preload_order_book(order_book: &OrderBook<OrderMetadata>, count: usize) {
+    let metadata = OrderMetadata {
+        client_id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
+        exchange_id: Uuid::new_v4(),
+        priority: 0,
+    };
     // Add limit buy orders at different price levels
     for i in 0..(count / 2) {
         let price_level = i % PRICE_LEVELS as usize;
         let price = BASE_BID_PRICE - price_level as u64 * 10; // Decreasing prices for bids
-
         let id = OrderId(Uuid::new_v4());
         let quantity = 10 + (i % 10) as u64; // 10-19 units
 
-        let _ = order_book.add_limit_order(id, price, quantity, Side::Buy, TimeInForce::Gtc);
+        let _ = order_book.add_limit_order(
+            id,
+            price,
+            quantity,
+            Side::Buy,
+            TimeInForce::Gtc,
+            Some(metadata),
+        );
     }
 
     // Add limit sell orders at different price levels
@@ -181,7 +202,14 @@ fn preload_order_book(order_book: &OrderBook, count: usize) {
         let id = OrderId(Uuid::new_v4());
         let quantity = 10 + (i % 10) as u64; // 10-19 units
 
-        let _ = order_book.add_limit_order(id, price, quantity, Side::Sell, TimeInForce::Gtc);
+        let _ = order_book.add_limit_order(
+            id,
+            price,
+            quantity,
+            Side::Sell,
+            TimeInForce::Gtc,
+            Some(metadata),
+        );
     }
 
     // Add a few iceberg orders
@@ -195,11 +223,12 @@ fn preload_order_book(order_book: &OrderBook, count: usize) {
         };
 
         let id = OrderId(Uuid::new_v4());
-        let _ = order_book.add_iceberg_order(id, price, 5, 45, side, TimeInForce::Gtc);
+        let _ =
+            order_book.add_iceberg_order(id, price, 5, 45, side, TimeInForce::Gtc, Some(metadata));
     }
 }
 
-fn print_order_book_state(order_book: &OrderBook) {
+fn print_order_book_state(order_book: &OrderBook<OrderMetadata>) {
     // Best prices
     match (order_book.best_bid(), order_book.best_ask()) {
         (Some(bid), Some(ask)) => {
@@ -299,7 +328,7 @@ fn print_order_book_state(order_book: &OrderBook) {
 fn spawn_maker_thread(
     thread_id: usize,
     handles: &mut Vec<thread::JoinHandle<()>>,
-    order_book: Arc<OrderBook>,
+    order_book: Arc<OrderBook<OrderMetadata>>,
     counter: Arc<AtomicU64>,
     order_id_queue: Arc<Mutex<VecDeque<OrderId>>>,
     barrier: Arc<Barrier>,
@@ -334,21 +363,37 @@ fn spawn_maker_thread(
             // Choose order type based on iteration
             let id = OrderId(Uuid::new_v4());
             let mut order_added = false;
+            let metadata = OrderMetadata {
+                client_id: Uuid::new_v4(),
+                user_id: Uuid::new_v4(),
+                exchange_id: Uuid::new_v4(),
+                priority: 0,
+            };
 
             match local_count % 5 {
                 0 => {
                     // Standard limit order
-                    if let Ok(_) =
-                        order_book.add_limit_order(id, price, quantity, side, TimeInForce::Gtc)
-                    {
+                    if let Ok(_) = order_book.add_limit_order(
+                        id,
+                        price,
+                        quantity,
+                        side,
+                        TimeInForce::Gtc,
+                        Some(metadata),
+                    ) {
                         order_added = true;
                     }
                 }
                 1 => {
                     // Post-only order
-                    if let Ok(_) =
-                        order_book.add_post_only_order(id, price, quantity, side, TimeInForce::Gtc)
-                    {
+                    if let Ok(_) = order_book.add_post_only_order(
+                        id,
+                        price,
+                        quantity,
+                        side,
+                        TimeInForce::Gtc,
+                        Some(metadata),
+                    ) {
                         order_added = true;
                     }
                 }
@@ -361,6 +406,7 @@ fn spawn_maker_thread(
                         quantity * 3 / 4,
                         side,
                         TimeInForce::Gtc,
+                        Some(metadata),
                     ) {
                         order_added = true;
                     }
@@ -378,6 +424,7 @@ fn spawn_maker_thread(
                         quantity,
                         side,
                         TimeInForce::Ioc,
+                        Some(metadata),
                     ) {
                         // IOC orders that don't fully execute may still leave resting quantity
                         order_added = true;
@@ -396,6 +443,7 @@ fn spawn_maker_thread(
                         quantity,
                         side,
                         TimeInForce::Fok,
+                        Some(metadata),
                     ) {
                         order_added = true;
                     }
@@ -442,7 +490,7 @@ fn spawn_maker_thread(
 fn spawn_taker_thread(
     thread_id: usize,
     handles: &mut Vec<thread::JoinHandle<()>>,
-    order_book: Arc<OrderBook>,
+    order_book: Arc<OrderBook<OrderMetadata>>,
     counter: Arc<AtomicU64>,
     barrier: Arc<Barrier>,
     running: Arc<AtomicBool>,
@@ -498,7 +546,7 @@ fn spawn_taker_thread(
 fn spawn_canceller_thread(
     thread_id: usize,
     handles: &mut Vec<thread::JoinHandle<()>>,
-    order_book: Arc<OrderBook>,
+    order_book: Arc<OrderBook<OrderMetadata>>,
     order_id_queue: Arc<Mutex<VecDeque<OrderId>>>,
     counter: Arc<AtomicU64>,
     barrier: Arc<Barrier>,

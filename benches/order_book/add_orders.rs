@@ -11,7 +11,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
     // Benchmark adding limit orders
     group.bench_function("add_limit_orders", |b| {
         b.iter(|| {
-            let order_book = OrderBook::new("TEST-SYMBOL");
+            let order_book: OrderBook = OrderBook::new("TEST-SYMBOL");
             for i in 0..100 {
                 let id = OrderId(Uuid::new_v4());
                 let _ = black_box(order_book.add_limit_order(
@@ -20,6 +20,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
                     10,
                     Side::Buy,
                     TimeInForce::Gtc,
+                    None,
                 ));
             }
         })
@@ -28,7 +29,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
     // Benchmark adding iceberg orders
     group.bench_function("add_iceberg_orders", |b| {
         b.iter(|| {
-            let order_book = OrderBook::new("TEST-SYMBOL");
+            let order_book: OrderBook = OrderBook::new("TEST-SYMBOL");
             for i in 0..100 {
                 let id = OrderId(Uuid::new_v4());
                 let _ = black_box(order_book.add_iceberg_order(
@@ -38,6 +39,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
                     15,
                     Side::Sell,
                     TimeInForce::Gtc,
+                    None,
                 ));
             }
         })
@@ -46,7 +48,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
     // Benchmark adding post-only orders
     group.bench_function("add_post_only_orders", |b| {
         b.iter(|| {
-            let order_book = OrderBook::new("TEST-SYMBOL");
+            let order_book: OrderBook = OrderBook::new("TEST-SYMBOL");
             for i in 0..100 {
                 let id = OrderId(Uuid::new_v4());
                 let _ = black_box(order_book.add_post_only_order(
@@ -55,6 +57,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
                     10,
                     Side::Buy,
                     TimeInForce::Gtc,
+                    None,
                 ));
             }
         })
@@ -67,7 +70,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
             order_count,
             |b, &order_count| {
                 b.iter(|| {
-                    let order_book = OrderBook::new("TEST-SYMBOL");
+                    let order_book: OrderBook = OrderBook::new("TEST-SYMBOL");
                     for _i in 0..order_count {
                         let id = OrderId(Uuid::new_v4());
                         let _ = black_box(order_book.add_limit_order(
@@ -76,6 +79,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
                             10,
                             Side::Buy,
                             TimeInForce::Gtc,
+                            None,
                         ));
                     }
                 })

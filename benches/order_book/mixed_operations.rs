@@ -11,7 +11,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
     // Benchmark a realistic trading scenario with mixed operations
     group.bench_function("realistic_trading_scenario", |b| {
         b.iter(|| {
-            let order_book = OrderBook::new("TEST-SYMBOL");
+            let order_book: OrderBook = OrderBook::new("TEST-SYMBOL");
 
             // Phase 1: Add initial orders on both sides of the book
             for i in 0..50 {
@@ -23,6 +23,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
                     10,
                     Side::Buy,
                     TimeInForce::Gtc,
+                    None,
                 ));
                 let _ = black_box(order_book.add_limit_order(
                     ask_id,
@@ -30,6 +31,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
                     10,
                     Side::Sell,
                     TimeInForce::Gtc,
+                    None,
                 ));
             }
 
@@ -44,6 +46,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
                     15,
                     Side::Buy,
                     TimeInForce::Gtc,
+                    None,
                 ));
                 let _ = black_box(order_book.add_iceberg_order(
                     ask_id,
@@ -52,6 +55,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
                     15,
                     Side::Sell,
                     TimeInForce::Gtc,
+                    None,
                 ));
             }
 
@@ -81,7 +85,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
     // Benchmark high-frequency trading scenario
     group.bench_function("high_frequency_scenario", |b| {
         b.iter(|| {
-            let order_book = OrderBook::new("TEST-SYMBOL");
+            let order_book: OrderBook = OrderBook::new("TEST-SYMBOL");
 
             // Set up initial orderbook
             for i in 0..200 {
@@ -93,7 +97,14 @@ pub fn register_benchmarks(c: &mut Criterion) {
                 };
 
                 let id = OrderId(Uuid::new_v4());
-                let _ = black_box(order_book.add_limit_order(id, price, 5, side, TimeInForce::Gtc));
+                let _ = black_box(order_book.add_limit_order(
+                    id,
+                    price,
+                    5,
+                    side,
+                    TimeInForce::Gtc,
+                    None,
+                ));
             }
 
             // Execute many small orders and modifications
@@ -117,6 +128,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
                     5,
                     side.opposite(),
                     TimeInForce::Gtc,
+                    None,
                 ));
             }
         })

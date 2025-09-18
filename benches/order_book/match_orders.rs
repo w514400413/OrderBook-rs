@@ -53,7 +53,7 @@ fn setup_limit_order_book(order_count: u64) -> OrderBook {
     for _i in 0..order_count {
         let id = OrderId(Uuid::new_v4());
         order_book
-            .add_limit_order(id, 1000, 10, Side::Sell, TimeInForce::Gtc)
+            .add_limit_order(id, 1000, 10, Side::Sell, TimeInForce::Gtc, None)
             .unwrap();
     }
 
@@ -67,7 +67,7 @@ fn setup_iceberg_order_book(order_count: u64) -> OrderBook {
     for _i in 0..order_count {
         let id = OrderId(Uuid::new_v4());
         order_book
-            .add_iceberg_order(id, 1000, 5, 15, Side::Sell, TimeInForce::Gtc)
+            .add_iceberg_order(id, 1000, 5, 15, Side::Sell, TimeInForce::Gtc, None)
             .unwrap();
     }
 

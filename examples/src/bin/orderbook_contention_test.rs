@@ -148,6 +148,7 @@ fn test_read_write_ratio() -> Result<(), String> {
                                     10,
                                     side,
                                     TimeInForce::Gtc,
+                                    None,
                                 );
                             }
                             1 => {
@@ -498,6 +499,7 @@ fn test_price_level_distribution() -> Result<(), String> {
                                 10,
                                 side,
                                 TimeInForce::Gtc,
+                                None,
                             );
                             std::thread::yield_now(); // Aggressively yield after write
                         }

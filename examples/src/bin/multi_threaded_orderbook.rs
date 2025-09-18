@@ -72,6 +72,7 @@ fn run_performance_test() {
                             10, // quantity
                             side,
                             TimeInForce::Gtc,
+                            None,
                         );
                     }
                     1 => {
@@ -200,6 +201,7 @@ fn populate_orderbook(book: &OrderBook, order_count: usize) {
             (10 + (i % 10)) as u64, // quantity 10-19
             Side::Buy,
             TimeInForce::Gtc,
+            None,
         );
     }
 
@@ -213,6 +215,7 @@ fn populate_orderbook(book: &OrderBook, order_count: usize) {
             (10 + (i % 10)) as u64, // quantity 10-19
             Side::Sell,
             TimeInForce::Gtc,
+            None,
         );
     }
 
@@ -231,6 +234,7 @@ fn populate_orderbook(book: &OrderBook, order_count: usize) {
             50, // hidden quantity
             side,
             TimeInForce::Gtc,
+            None,
         );
     }
 

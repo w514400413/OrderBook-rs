@@ -70,7 +70,7 @@ fn setup_order_book_with_orders(order_count: u64) -> OrderBook {
     for _i in 0..order_count {
         let id = OrderId(Uuid::new_v4());
         order_book
-            .add_limit_order(id, 1000, 10, Side::Buy, TimeInForce::Gtc)
+            .add_limit_order(id, 1000, 10, Side::Buy, TimeInForce::Gtc, None)
             .unwrap();
     }
 

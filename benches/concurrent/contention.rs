@@ -54,7 +54,7 @@ fn measure_read_write_contention(
     iterations: u64,
     read_ratio: usize,
 ) -> Duration {
-    let order_book = Arc::new(OrderBook::new("TEST-SYMBOL"));
+    let order_book: Arc<OrderBook> = Arc::new(OrderBook::new("TEST-SYMBOL"));
     let barrier = Arc::new(Barrier::new(thread_count + 1)); // +1 for main thread
 
     // Pre-populate with orders to read against
@@ -63,7 +63,7 @@ fn measure_read_write_contention(
         let side = if i % 2 == 0 { Side::Buy } else { Side::Sell };
         let price = if side == Side::Buy { 990 } else { 1010 };
         order_book
-            .add_limit_order(id, price, 10, side, TimeInForce::Gtc)
+            .add_limit_order(id, price, 10, side, TimeInForce::Gtc, None)
             .unwrap();
     }
 
@@ -107,7 +107,7 @@ fn measure_read_write_contention(
                             };
                             let price = if side == Side::Buy { 990 } else { 1010 };
                             thread_order_book
-                                .add_limit_order(id, price, 10, side, TimeInForce::Gtc)
+                                .add_limit_order(id, price, 10, side, TimeInForce::Gtc, None)
                                 .unwrap();
                         }
                         1 => {
@@ -161,14 +161,14 @@ fn measure_hot_spot_contention(
     iterations: u64,
     hot_spot_percentage: usize,
 ) -> Duration {
-    let order_book = Arc::new(OrderBook::new("TEST-SYMBOL"));
+    let order_book: Arc<OrderBook> = Arc::new(OrderBook::new("TEST-SYMBOL"));
     let barrier = Arc::new(Barrier::new(thread_count + 1)); // +1 for main thread
 
     // Create "hot spot" price level at 1000
     for _i in 0..20 {
         let id = OrderId(Uuid::new_v4());
         order_book
-            .add_limit_order(id, 1000, 10, Side::Sell, TimeInForce::Gtc)
+            .add_limit_order(id, 1000, 10, Side::Sell, TimeInForce::Gtc, None)
             .unwrap();
     }
 
@@ -176,7 +176,7 @@ fn measure_hot_spot_contention(
     for i in 1..20 {
         let id = OrderId(Uuid::new_v4());
         order_book
-            .add_limit_order(id, 1000 + i, 10, Side::Sell, TimeInForce::Gtc)
+            .add_limit_order(id, 1000 + i, 10, Side::Sell, TimeInForce::Gtc, None)
             .unwrap();
     }
 
@@ -208,7 +208,7 @@ fn measure_hot_spot_contention(
                         // Add a new order at selected price
                         let id = OrderId(Uuid::new_v4());
                         thread_order_book
-                            .add_limit_order(id, price, 10, Side::Buy, TimeInForce::Gtc)
+                            .add_limit_order(id, price, 10, Side::Buy, TimeInForce::Gtc, None)
                             .unwrap();
                     }
                     1 => {

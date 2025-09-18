@@ -8,3 +8,4 @@ orderbook-rs = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 pricelevel = { workspace = true }
+serde = { version = "1.0.219", features = ["derive"] }

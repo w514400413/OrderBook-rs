@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod test_order_modifications {
+    use crate::orderbook::modifications::OrderQuantity;
     use crate::{OrderBook, OrderBookError};
     use pricelevel::{OrderId, OrderType, OrderUpdate, Side, TimeInForce};
     use uuid::Uuid;
@@ -11,7 +12,7 @@ mod test_order_modifications {
 
     #[test]
     fn test_update_price_same_value() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Add a limit order
         let id = create_order_id();
@@ -19,7 +20,7 @@ mod test_order_modifications {
         let quantity = 10;
         let side = Side::Buy;
 
-        let result = book.add_limit_order(id, price, quantity, side, TimeInForce::Gtc);
+        let result = book.add_limit_order(id, price, quantity, side, TimeInForce::Gtc, None);
         assert!(result.is_ok());
 
         // Try to update to the same price
@@ -40,7 +41,7 @@ mod test_order_modifications {
 
     #[test]
     fn test_update_price_and_quantity() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Add a limit order
         let id = create_order_id();
@@ -48,7 +49,7 @@ mod test_order_modifications {
         let quantity = 10;
         let side = Side::Buy;
 
-        let result = book.add_limit_order(id, price, quantity, side, TimeInForce::Gtc);
+        let result = book.add_limit_order(id, price, quantity, side, TimeInForce::Gtc, None);
         assert!(result.is_ok());
 
         // Update price and quantity
@@ -68,12 +69,12 @@ mod test_order_modifications {
         assert!(updated_order.is_some());
         let updated_order = updated_order.unwrap();
         assert_eq!(updated_order.price(), new_price);
-        assert_eq!(updated_order.visible_quantity(), new_quantity);
+        assert_eq!(updated_order.quantity(), new_quantity);
     }
 
     #[test]
     fn test_cancel_nonexistent_order() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Try to cancel a non-existent order
         let id = create_order_id();
@@ -86,7 +87,7 @@ mod test_order_modifications {
 
     #[test]
     fn test_update_order_cancel() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Add a limit order
         let id = create_order_id();
@@ -94,7 +95,7 @@ mod test_order_modifications {
         let quantity = 10;
         let side = Side::Buy;
 
-        let result = book.add_limit_order(id, price, quantity, side, TimeInForce::Gtc);
+        let result = book.add_limit_order(id, price, quantity, side, TimeInForce::Gtc, None);
         assert!(result.is_ok());
 
         // Cancel using the OrderUpdate enum
@@ -110,7 +111,7 @@ mod test_order_modifications {
 
     #[test]
     fn test_update_order_replace() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Add a limit order
         let id = create_order_id();
@@ -118,7 +119,7 @@ mod test_order_modifications {
         let quantity = 10;
         let side = Side::Buy;
 
-        let result = book.add_limit_order(id, price, quantity, side, TimeInForce::Gtc);
+        let result = book.add_limit_order(id, price, quantity, side, TimeInForce::Gtc, None);
         assert!(result.is_ok());
 
         // Replace the order
@@ -144,7 +145,7 @@ mod test_order_modifications {
 
     #[test]
     fn test_replace_with_different_side() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Add a limit order
         let id = create_order_id();
@@ -152,7 +153,7 @@ mod test_order_modifications {
         let quantity = 10;
         let side = Side::Buy;
 
-        let result = book.add_limit_order(id, price, quantity, side, TimeInForce::Gtc);
+        let result = book.add_limit_order(id, price, quantity, side, TimeInForce::Gtc, None);
         assert!(result.is_ok());
 
         // Replace with different side
@@ -174,7 +175,7 @@ mod test_order_modifications {
 
     #[test]
     fn test_iceberg_order_update_quantity() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Add an iceberg order
         let id = create_order_id();
@@ -183,7 +184,8 @@ mod test_order_modifications {
         let hidden = 90;
         let side = Side::Buy;
 
-        let result = book.add_iceberg_order(id, price, visible, hidden, side, TimeInForce::Gtc);
+        let result =
+            book.add_iceberg_order(id, price, visible, hidden, side, TimeInForce::Gtc, None);
         assert!(result.is_ok());
 
         // Update visible quantity
@@ -200,7 +202,7 @@ mod test_order_modifications {
         let updated_order = book.get_order(id);
         assert!(updated_order.is_some());
         let updated_order = updated_order.unwrap();
-        assert_eq!(updated_order.visible_quantity(), new_quantity);
+        assert_eq!(updated_order.quantity(), new_quantity);
 
         // Hidden quantity should remain the same
         match &*updated_order {
@@ -217,6 +219,7 @@ mod test_order_modifications {
 #[cfg(test)]
 mod test_modifications_remaining {
     use crate::OrderBook;
+
     use pricelevel::{OrderId, OrderType, OrderUpdate, PegReferenceType, Side, TimeInForce};
     use uuid::Uuid;
 
@@ -226,7 +229,7 @@ mod test_modifications_remaining {
 
     #[test]
     fn test_update_price_error_cases() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Update a non-existent order
         let id = create_order_id();
@@ -242,7 +245,7 @@ mod test_modifications_remaining {
 
     #[test]
     fn test_update_price_and_quantity_nonexistent() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Update a non-existent order
         let id = create_order_id();
@@ -259,7 +262,7 @@ mod test_modifications_remaining {
 
     #[test]
     fn test_update_order_with_all_types() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Add different order types
 
@@ -275,6 +278,7 @@ mod test_modifications_remaining {
             time_in_force: TimeInForce::Gtc,
             trail_amount: 5,
             last_reference_price: 995,
+            extra_fields: (),
         };
 
         // 2. Add a pegged order
@@ -288,6 +292,7 @@ mod test_modifications_remaining {
             time_in_force: TimeInForce::Gtc,
             reference_price_offset: 5,
             reference_price_type: PegReferenceType::BestBid,
+            extra_fields: (),
         };
 
         // 3. Add a market to limit order
@@ -299,6 +304,7 @@ mod test_modifications_remaining {
             side: Side::Buy,
             timestamp,
             time_in_force: TimeInForce::Gtc,
+            extra_fields: (),
         };
 
         // 4. Add a reserve order
@@ -314,6 +320,7 @@ mod test_modifications_remaining {
             replenish_threshold: 2,
             replenish_amount: Some(3),
             auto_replenish: true,
+            extra_fields: (),
         };
 
         // Add all orders to the book
@@ -382,7 +389,7 @@ mod test_modifications_remaining {
 
     #[test]
     fn test_replace_with_special_order_types() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Add a reserve order
         let id = create_order_id();
@@ -398,6 +405,7 @@ mod test_modifications_remaining {
             replenish_threshold: 2,
             replenish_amount: Some(3),
             auto_replenish: true,
+            extra_fields: (),
         };
 
         let _ = book.add_order(reserve_order);
@@ -424,11 +432,11 @@ mod test_modifications_remaining {
 
     #[test]
     fn test_cancel_order_removes_price_level() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Add a limit order
         let id = create_order_id();
-        let _ = book.add_limit_order(id, 1000, 10, Side::Buy, TimeInForce::Gtc);
+        let _ = book.add_limit_order(id, 1000, 10, Side::Buy, TimeInForce::Gtc, None);
 
         // Cancel the order
         let update = OrderUpdate::Cancel { order_id: id };
@@ -456,7 +464,7 @@ mod test_modifications_specific {
 
     #[test]
     fn test_update_price_edge_cases() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Update a non-existent order
         let id = create_order_id();
@@ -473,7 +481,7 @@ mod test_modifications_specific {
 
     #[test]
     fn test_cancel_non_existent_order() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Create an ID for an order that doesn't exist
         let id = create_order_id();
@@ -489,7 +497,7 @@ mod test_modifications_specific {
 
     #[test]
     fn test_update_order_when_order_is_not_found() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Create a reserve order type
         let id = create_order_id();
@@ -505,6 +513,7 @@ mod test_modifications_specific {
             replenish_threshold: 2,
             replenish_amount: Some(3),
             auto_replenish: true,
+            extra_fields: (),
         };
 
         // Add it to the book
@@ -555,7 +564,7 @@ mod test_modifications_specific {
 
     #[test]
     fn test_replace_unsupported_order_type() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Add an unsupported order type
         let id = create_order_id();
@@ -571,6 +580,7 @@ mod test_modifications_specific {
             time_in_force: TimeInForce::Gtc,
             reference_price_offset: 5,
             reference_price_type: PegReferenceType::BestBid,
+            extra_fields: (),
         };
 
         let _ = book.add_order(peg_order);
@@ -607,8 +617,8 @@ mod tests {
     use crate::orderbook::modifications::OrderQuantity;
     use pricelevel::{OrderId, OrderType, OrderUpdate, Side, TimeInForce};
 
-    fn setup_book_with_orders() -> OrderBook {
-        let book = OrderBook::new("TEST");
+    fn setup_book_with_orders() -> OrderBook<()> {
+        let book: OrderBook<()> = OrderBook::new("TEST");
         let sell_order = OrderType::Standard {
             id: OrderId::new(),
             side: Side::Sell,
@@ -616,6 +626,7 @@ mod tests {
             quantity: 10,
             time_in_force: TimeInForce::Gtc,
             timestamp: 0,
+            extra_fields: (),
         };
         book.add_order(sell_order).unwrap();
 
@@ -626,6 +637,7 @@ mod tests {
             quantity: 10,
             time_in_force: TimeInForce::Gtc,
             timestamp: 0,
+            extra_fields: (),
         };
         book.add_order(buy_order).unwrap();
         book
@@ -641,6 +653,7 @@ mod tests {
             quantity: 5,
             time_in_force: TimeInForce::Gtc,
             timestamp: 0,
+            extra_fields: (),
         };
 
         let result = book.add_order(post_only_order);
@@ -649,7 +662,7 @@ mod tests {
 
     #[test]
     fn test_add_expired_order() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
         book.set_market_close_timestamp(100); // Market closed at timestamp 100
 
         let expired_order = OrderType::Standard {
@@ -659,6 +672,7 @@ mod tests {
             quantity: 10,
             time_in_force: TimeInForce::Day, // Day order
             timestamp: 101,                  // Submitted after market close
+            extra_fields: (),
         };
 
         let result = book.add_order(expired_order);
@@ -670,7 +684,7 @@ mod tests {
 
     #[test]
     fn test_successful_cancel_order_removes_level() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
         let order_id = OrderId::new();
         let order = OrderType::Standard {
             id: order_id,
@@ -679,6 +693,7 @@ mod tests {
             quantity: 10,
             time_in_force: TimeInForce::Gtc,
             timestamp: 0,
+            extra_fields: (),
         };
         book.add_order(order).unwrap();
 
@@ -690,7 +705,7 @@ mod tests {
 
     #[test]
     fn test_update_order_not_found() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
         let non_existent_id = OrderId::new();
         let result = book.update_order(OrderUpdate::Cancel {
             order_id: non_existent_id,
@@ -730,6 +745,7 @@ mod tests {
             replenish_threshold: 0,
             time_in_force: TimeInForce::Gtc,
             timestamp: 0,
+            extra_fields: (),
         };
 
         // Simulate a partial fill of 15 units

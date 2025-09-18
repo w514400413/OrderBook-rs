@@ -23,6 +23,7 @@ mod tests {
             side,
             timestamp,
             time_in_force,
+            extra_fields: (),
         };
 
         // Test property getters
@@ -58,6 +59,7 @@ mod tests {
             side,
             timestamp,
             time_in_force,
+            extra_fields: (),
         };
 
         // Test property getters
@@ -86,6 +88,7 @@ mod tests {
             side,
             timestamp,
             time_in_force,
+            extra_fields: (),
         };
 
         // Test property getters
@@ -112,6 +115,7 @@ mod tests {
             side: Side::Buy,
             timestamp: 12345678,
             time_in_force: TimeInForce::Ioc,
+            extra_fields: (),
         };
 
         assert!(ioc_order.is_immediate(), "IOC orders should be immediate");
@@ -132,6 +136,7 @@ mod tests {
             side: Side::Buy,
             timestamp: 12345678,
             time_in_force: TimeInForce::Fok,
+            extra_fields: (),
         };
 
         assert!(fok_order.is_immediate(), "FOK orders should be immediate");
@@ -155,6 +160,7 @@ mod tests {
             side: Side::Buy,
             timestamp: 12345678,
             time_in_force: TimeInForce::Gtc,
+            extra_fields: (),
         };
 
         let reduced_standard = standard_order.with_reduced_quantity(new_quantity);
@@ -175,6 +181,7 @@ mod tests {
             side: Side::Buy,
             timestamp: 12345678,
             time_in_force: TimeInForce::Gtc,
+            extra_fields: (),
         };
 
         let reduced_iceberg = iceberg_order.with_reduced_quantity(new_quantity);
@@ -213,6 +220,7 @@ mod tests {
             side: Side::Buy,
             timestamp: 12345678,
             time_in_force: TimeInForce::Gtc,
+            extra_fields: (),
         };
 
         let (refreshed_order, used_hidden) = iceberg_order.refresh_iceberg(refresh_amount);
@@ -254,6 +262,7 @@ mod tests {
             side: Side::Buy,
             timestamp: 12345678,
             time_in_force: TimeInForce::Gtc,
+            extra_fields: (),
         };
 
         let (consumed, updated_order, hidden_reduced, remaining) =
@@ -284,6 +293,7 @@ mod tests {
             side: Side::Buy,
             timestamp: 12345678,
             time_in_force: TimeInForce::Gtc,
+            extra_fields: (),
         };
 
         let (consumed, updated_order, hidden_reduced, remaining) =
@@ -324,6 +334,7 @@ mod tests {
             side: Side::Buy,
             timestamp: 12345678,
             time_in_force: TimeInForce::Gtc,
+            extra_fields: (),
         };
 
         let (consumed, updated_order, hidden_reduced, remaining) =
