@@ -1,8 +1,7 @@
-
 mod book_coverage_tests;
 mod matching_coverage_tests;
-mod modifications_coverage_tests;
-mod private_coverage_tests;
-mod operations_coverage_tests;
 mod matching_coverage_tests_extended;
+mod modifications_coverage_tests;
+mod operations_coverage_tests;
 mod operations_coverage_tests_extended;
+mod private_coverage_tests;

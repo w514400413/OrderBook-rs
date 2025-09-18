@@ -1,6 +1,6 @@
 use orderbook_rs::OrderBook;
 use orderbook_rs::orderbook::modifications::OrderQuantity;
-use pricelevel::{OrderId, OrderType, OrderUpdate, Side, TimeInForce, PegReferenceType};
+use pricelevel::{OrderId, OrderType, OrderUpdate, PegReferenceType, Side, TimeInForce};
 use uuid::Uuid;
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -10,7 +10,7 @@ struct TestExtraFields {
 }
 
 #[cfg(test)]
-mod modifications_coverage_tests {
+mod tests {
     use super::*;
 
     #[test]
@@ -198,21 +198,24 @@ mod modifications_coverage_tests {
     fn test_update_order_price_same_value() {
         let book: OrderBook<TestExtraFields> = OrderBook::new("TEST");
         let order_id = OrderId(Uuid::new_v4());
-        
+
         // Add an order
         book.add_limit_order(order_id, 1000, 100, Side::Buy, TimeInForce::Gtc, None)
             .unwrap();
-        
+
         // Try to update to the same price
         let update = OrderUpdate::UpdatePrice {
             order_id,
             new_price: 1000,
         };
-        
+
         let result = book.update_order(update);
         assert!(result.is_err());
         if let Err(e) = result {
-            assert!(e.to_string().contains("Cannot update price to the same value"));
+            assert!(
+                e.to_string()
+                    .contains("Cannot update price to the same value")
+            );
         }
     }
 
@@ -220,22 +223,22 @@ mod modifications_coverage_tests {
     fn test_update_order_price_success() {
         let book: OrderBook<TestExtraFields> = OrderBook::new("TEST");
         let order_id = OrderId(Uuid::new_v4());
-        
+
         // Add an order
         book.add_limit_order(order_id, 1000, 100, Side::Buy, TimeInForce::Gtc, None)
             .unwrap();
-        
+
         // Update the price
         let update = OrderUpdate::UpdatePrice {
             order_id,
             new_price: 1010,
         };
-        
+
         let result = book.update_order(update);
         assert!(result.is_ok());
         let updated_order = result.unwrap();
         assert!(updated_order.is_some());
-        
+
         // Verify the order was updated
         let order = updated_order.unwrap();
         assert_eq!(order.price(), 1010);
@@ -246,22 +249,22 @@ mod modifications_coverage_tests {
     fn test_update_order_quantity_success() {
         let book: OrderBook<TestExtraFields> = OrderBook::new("TEST");
         let order_id = OrderId(Uuid::new_v4());
-        
+
         // Add an order
         book.add_limit_order(order_id, 1000, 100, Side::Buy, TimeInForce::Gtc, None)
             .unwrap();
-        
+
         // Update the quantity
         let update = OrderUpdate::UpdateQuantity {
             order_id,
             new_quantity: 80,
         };
-        
+
         let result = book.update_order(update);
         assert!(result.is_ok());
         let updated_order = result.unwrap();
         assert!(updated_order.is_some());
-        
+
         // Verify the order was updated
         let order = updated_order.unwrap();
         assert_eq!(order.price(), 1000);
@@ -272,23 +275,23 @@ mod modifications_coverage_tests {
     fn test_update_order_price_and_quantity_success() {
         let book: OrderBook<TestExtraFields> = OrderBook::new("TEST");
         let order_id = OrderId(Uuid::new_v4());
-        
+
         // Add an order
         book.add_limit_order(order_id, 1000, 100, Side::Buy, TimeInForce::Gtc, None)
             .unwrap();
-        
+
         // Update both price and quantity
         let update = OrderUpdate::UpdatePriceAndQuantity {
             order_id,
             new_price: 1020,
             new_quantity: 75,
         };
-        
+
         let result = book.update_order(update);
         assert!(result.is_ok());
         let updated_order = result.unwrap();
         assert!(updated_order.is_some());
-        
+
         // Verify the order was updated
         let order = updated_order.unwrap();
         assert_eq!(order.price(), 1020);
@@ -299,13 +302,13 @@ mod modifications_coverage_tests {
     fn test_update_nonexistent_order() {
         let book: OrderBook<TestExtraFields> = OrderBook::new("TEST");
         let nonexistent_id = OrderId(Uuid::new_v4());
-        
+
         // Try to update a nonexistent order
         let update = OrderUpdate::UpdatePrice {
             order_id: nonexistent_id,
             new_price: 1000,
         };
-        
+
         let result = book.update_order(update);
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());

@@ -11,10 +11,10 @@ struct TestExtraFields {
 }
 
 #[cfg(test)]
-mod private_coverage_tests {
-    use orderbook_rs::{current_time_millis, OrderBook};
-    use orderbook_rs::orderbook::modifications::OrderQuantity;
+mod tests {
     use super::*;
+    use orderbook_rs::orderbook::modifications::OrderQuantity;
+    use orderbook_rs::{OrderBook, current_time_millis};
 
     fn create_order_id() -> OrderId {
         OrderId(Uuid::new_v4())
@@ -25,10 +25,10 @@ mod private_coverage_tests {
         // Test has_expired with market close timestamp set (lines 43, 65)
         let book = OrderBook::<TestExtraFields>::new("TEST");
         let current_time = current_time_millis();
-        
+
         // Set market close timestamp in the past
         book.set_market_close_timestamp(current_time - 1000);
-        
+
         let day_order = OrderType::Standard {
             id: create_order_id(),
             price: 100,
@@ -38,7 +38,7 @@ mod private_coverage_tests {
             time_in_force: TimeInForce::Day,
             extra_fields: TestExtraFields::default(),
         };
-        
+
         // Day order should expire when market close is in the past
         assert!(book.has_expired(&day_order));
     }
@@ -48,7 +48,7 @@ mod private_coverage_tests {
         // Test has_expired without market close timestamp (lines 67-72)
         let book = OrderBook::<TestExtraFields>::new("TEST");
         let current_time = current_time_millis();
-        
+
         let gtc_order = OrderType::Standard {
             id: create_order_id(),
             price: 100,
@@ -58,7 +58,7 @@ mod private_coverage_tests {
             time_in_force: TimeInForce::Gtc,
             extra_fields: TestExtraFields::default(),
         };
-        
+
         // GTC order should not expire without market close
         assert!(!book.has_expired(&gtc_order));
     }
@@ -67,17 +67,17 @@ mod private_coverage_tests {
     fn test_will_cross_market_buy_side() {
         // Test will_cross_market for buy side (lines 74-80)
         let book = OrderBook::<TestExtraFields>::new("TEST");
-        
+
         // Add a sell order at price 100
         let sell_id = create_order_id();
         let _ = book.add_limit_order(sell_id, 100, 10, Side::Sell, TimeInForce::Gtc, None);
-        
+
         // Buy at 100 should cross (equal price)
         assert!(book.will_cross_market(100, Side::Buy));
-        
+
         // Buy at 101 should cross (higher price)
         assert!(book.will_cross_market(101, Side::Buy));
-        
+
         // Buy at 99 should not cross (lower price)
         assert!(!book.will_cross_market(99, Side::Buy));
     }
@@ -86,17 +86,17 @@ mod private_coverage_tests {
     fn test_will_cross_market_sell_side() {
         // Test will_cross_market for sell side (lines 82)
         let book = OrderBook::<TestExtraFields>::new("TEST");
-        
+
         // Add a buy order at price 100
         let buy_id = create_order_id();
         let _ = book.add_limit_order(buy_id, 100, 10, Side::Buy, TimeInForce::Gtc, None);
-        
+
         // Sell at 100 should cross (equal price)
         assert!(book.will_cross_market(100, Side::Sell));
-        
+
         // Sell at 99 should cross (lower price)
         assert!(book.will_cross_market(99, Side::Sell));
-        
+
         // Sell at 101 should not cross (higher price)
         assert!(!book.will_cross_market(101, Side::Sell));
     }
@@ -106,7 +106,7 @@ mod private_coverage_tests {
         // Test place_order_in_book for buy side (lines 90)
         let book = OrderBook::<TestExtraFields>::new("TEST");
         let order_id = create_order_id();
-        
+
         let order = Arc::new(OrderType::Standard {
             id: order_id,
             price: 100,
@@ -116,14 +116,14 @@ mod private_coverage_tests {
             time_in_force: TimeInForce::Gtc,
             extra_fields: TestExtraFields::default(),
         });
-        
+
         let result = book.place_order_in_book(order.clone());
         assert!(result.is_ok());
-        
+
         // Verify order was added by checking if we can retrieve it
         let retrieved_order = book.get_order(order_id);
         assert!(retrieved_order.is_some());
-        
+
         // Verify order properties
         let order = retrieved_order.unwrap();
         assert_eq!(order.price(), 100);
@@ -136,7 +136,7 @@ mod private_coverage_tests {
         // Test place_order_in_book for sell side
         let book = OrderBook::<TestExtraFields>::new("TEST");
         let order_id = create_order_id();
-        
+
         let order = Arc::new(OrderType::Standard {
             id: order_id,
             price: 100,
@@ -146,14 +146,14 @@ mod private_coverage_tests {
             time_in_force: TimeInForce::Gtc,
             extra_fields: TestExtraFields::default(),
         });
-        
+
         let result = book.place_order_in_book(order.clone());
         assert!(result.is_ok());
-        
+
         // Verify order was added by checking if we can retrieve it
         let retrieved_order = book.get_order(order_id);
         assert!(retrieved_order.is_some());
-        
+
         // Verify order properties
         let order = retrieved_order.unwrap();
         assert_eq!(order.price(), 100);
@@ -167,7 +167,7 @@ mod private_coverage_tests {
         let book = OrderBook::<TestExtraFields>::new("TEST");
         let order_id = create_order_id();
         let timestamp = current_time_millis();
-        
+
         let order = OrderType::Standard {
             id: order_id,
             price: 100,
@@ -179,9 +179,9 @@ mod private_coverage_tests {
                 metadata: "test".to_string(),
             },
         };
-        
+
         let unit_order = book.convert_to_unit_type(&order);
-        
+
         match unit_order {
             OrderType::Standard {
                 id: converted_id,
@@ -190,7 +190,7 @@ mod private_coverage_tests {
                 side: converted_side,
                 timestamp: converted_timestamp,
                 time_in_force: converted_tif,
-                extra_fields,
+                extra_fields: _,
             } => {
                 assert_eq!(converted_id, order_id);
                 assert_eq!(converted_price, 100);
@@ -198,7 +198,7 @@ mod private_coverage_tests {
                 assert_eq!(converted_side, Side::Buy);
                 assert_eq!(converted_timestamp, timestamp);
                 assert_eq!(converted_tif, TimeInForce::Gtc);
-                assert_eq!(extra_fields, ()); // Should be unit type
+                // extra_fields is unit type as expected
             }
             _ => panic!("Expected Standard order type"),
         }
@@ -210,7 +210,7 @@ mod private_coverage_tests {
         let book = OrderBook::<TestExtraFields>::new("TEST");
         let order_id = create_order_id();
         let timestamp = current_time_millis();
-        
+
         let order = OrderType::IcebergOrder {
             id: order_id,
             price: 100,
@@ -223,9 +223,9 @@ mod private_coverage_tests {
                 metadata: "iceberg".to_string(),
             },
         };
-        
+
         let unit_order = book.convert_to_unit_type(&order);
-        
+
         match unit_order {
             OrderType::IcebergOrder {
                 id: converted_id,
@@ -235,7 +235,7 @@ mod private_coverage_tests {
                 side: converted_side,
                 timestamp: converted_timestamp,
                 time_in_force: converted_tif,
-                extra_fields,
+                extra_fields: _,
             } => {
                 assert_eq!(converted_id, order_id);
                 assert_eq!(converted_price, 100);
@@ -244,7 +244,7 @@ mod private_coverage_tests {
                 assert_eq!(converted_side, Side::Sell);
                 assert_eq!(converted_timestamp, timestamp);
                 assert_eq!(converted_tif, TimeInForce::Ioc);
-                assert_eq!(extra_fields, ()); // Should be unit type
+                // extra_fields is unit type as expected
             }
             _ => panic!("Expected IcebergOrder type"),
         }
@@ -256,7 +256,7 @@ mod private_coverage_tests {
         let book = OrderBook::<TestExtraFields>::new("TEST");
         let order_id = create_order_id();
         let timestamp = current_time_millis();
-        
+
         let order = OrderType::PostOnly {
             id: order_id,
             price: 100,
@@ -268,9 +268,9 @@ mod private_coverage_tests {
                 metadata: "post_only".to_string(),
             },
         };
-        
+
         let unit_order = book.convert_to_unit_type(&order);
-        
+
         match unit_order {
             OrderType::PostOnly {
                 id: converted_id,
@@ -279,7 +279,7 @@ mod private_coverage_tests {
                 side: converted_side,
                 timestamp: converted_timestamp,
                 time_in_force: converted_tif,
-                extra_fields,
+                extra_fields: _,
             } => {
                 assert_eq!(converted_id, order_id);
                 assert_eq!(converted_price, 100);
@@ -287,7 +287,7 @@ mod private_coverage_tests {
                 assert_eq!(converted_side, Side::Buy);
                 assert_eq!(converted_timestamp, timestamp);
                 assert_eq!(converted_tif, TimeInForce::Fok);
-                assert_eq!(extra_fields, ()); // Should be unit type
+                // extra_fields is unit type as expected
             }
             _ => panic!("Expected PostOnly order type"),
         }
@@ -299,7 +299,7 @@ mod private_coverage_tests {
         let book = OrderBook::<TestExtraFields>::new("TEST");
         let order_id = create_order_id();
         let timestamp = current_time_millis();
-        
+
         let order = OrderType::TrailingStop {
             id: order_id,
             price: 100,
@@ -313,9 +313,9 @@ mod private_coverage_tests {
                 metadata: "trailing_stop".to_string(),
             },
         };
-        
+
         let unit_order = book.convert_to_unit_type(&order);
-        
+
         match unit_order {
             OrderType::TrailingStop {
                 id: converted_id,
@@ -326,7 +326,7 @@ mod private_coverage_tests {
                 time_in_force: converted_tif,
                 trail_amount: converted_trail,
                 last_reference_price: converted_ref_price,
-                extra_fields,
+                extra_fields: _,
             } => {
                 assert_eq!(converted_id, order_id);
                 assert_eq!(converted_price, 100);
@@ -336,7 +336,7 @@ mod private_coverage_tests {
                 assert_eq!(converted_tif, TimeInForce::Day);
                 assert_eq!(converted_trail, 5);
                 assert_eq!(converted_ref_price, 105);
-                assert_eq!(extra_fields, ()); // Should be unit type
+                // extra_fields is unit type as expected
             }
             _ => panic!("Expected TrailingStop order type"),
         }
@@ -348,7 +348,7 @@ mod private_coverage_tests {
         let book = OrderBook::<TestExtraFields>::new("TEST");
         let order_id = create_order_id();
         let timestamp = current_time_millis();
-        
+
         let order = OrderType::PeggedOrder {
             id: order_id,
             price: 100,
@@ -362,9 +362,9 @@ mod private_coverage_tests {
                 metadata: "pegged".to_string(),
             },
         };
-        
+
         let unit_order = book.convert_to_unit_type(&order);
-        
+
         match unit_order {
             OrderType::PeggedOrder {
                 id: converted_id,
@@ -375,7 +375,7 @@ mod private_coverage_tests {
                 time_in_force: converted_tif,
                 reference_price_offset: converted_offset,
                 reference_price_type: converted_ref_type,
-                extra_fields,
+                extra_fields: _,
             } => {
                 assert_eq!(converted_id, order_id);
                 assert_eq!(converted_price, 100);
@@ -385,7 +385,7 @@ mod private_coverage_tests {
                 assert_eq!(converted_tif, TimeInForce::Gtc);
                 assert_eq!(converted_offset, 2);
                 assert_eq!(converted_ref_type, PegReferenceType::BestBid);
-                assert_eq!(extra_fields, ()); // Should be unit type
+                // extra_fields is unit type as expected
             }
             _ => panic!("Expected PeggedOrder order type"),
         }
@@ -397,7 +397,7 @@ mod private_coverage_tests {
         let book = OrderBook::<TestExtraFields>::new("TEST");
         let order_id = create_order_id();
         let timestamp = current_time_millis();
-        
+
         let order = OrderType::MarketToLimit {
             id: order_id,
             price: 100,
@@ -409,9 +409,9 @@ mod private_coverage_tests {
                 metadata: "market_to_limit".to_string(),
             },
         };
-        
+
         let unit_order = book.convert_to_unit_type(&order);
-        
+
         match unit_order {
             OrderType::MarketToLimit {
                 id: converted_id,
@@ -420,7 +420,7 @@ mod private_coverage_tests {
                 side: converted_side,
                 timestamp: converted_timestamp,
                 time_in_force: converted_tif,
-                extra_fields,
+                extra_fields: _,
             } => {
                 assert_eq!(converted_id, order_id);
                 assert_eq!(converted_price, 100);
@@ -428,7 +428,7 @@ mod private_coverage_tests {
                 assert_eq!(converted_side, Side::Sell);
                 assert_eq!(converted_timestamp, timestamp);
                 assert_eq!(converted_tif, TimeInForce::Ioc);
-                assert_eq!(extra_fields, ()); // Should be unit type
+                // extra_fields is unit type as expected
             }
             _ => panic!("Expected MarketToLimit order type"),
         }
@@ -440,7 +440,7 @@ mod private_coverage_tests {
         let book = OrderBook::<TestExtraFields>::new("TEST");
         let order_id = create_order_id();
         let timestamp = current_time_millis();
-        
+
         let order = OrderType::ReserveOrder {
             id: order_id,
             price: 100,
@@ -456,9 +456,9 @@ mod private_coverage_tests {
                 metadata: "reserve".to_string(),
             },
         };
-        
+
         let unit_order = book.convert_to_unit_type(&order);
-        
+
         match unit_order {
             OrderType::ReserveOrder {
                 id: converted_id,
@@ -471,7 +471,7 @@ mod private_coverage_tests {
                 replenish_threshold: converted_threshold,
                 replenish_amount: converted_amount,
                 auto_replenish: converted_auto,
-                extra_fields,
+                extra_fields: _,
             } => {
                 assert_eq!(converted_id, order_id);
                 assert_eq!(converted_price, 100);
@@ -482,8 +482,8 @@ mod private_coverage_tests {
                 assert_eq!(converted_tif, TimeInForce::Fok);
                 assert_eq!(converted_threshold, 5);
                 assert_eq!(converted_amount, Some(15));
-                assert_eq!(converted_auto, true);
-                assert_eq!(extra_fields, ()); // Should be unit type
+                assert!(converted_auto);
+                // extra_fields is unit type as expected
             }
             _ => panic!("Expected ReserveOrder order type"),
         }
@@ -494,7 +494,7 @@ mod private_coverage_tests {
         // Test has_expired for GTD order that hasn't expired
         let book = OrderBook::<TestExtraFields>::new("TEST");
         let current_time = current_time_millis();
-        
+
         let gtd_order = OrderType::Standard {
             id: create_order_id(),
             price: 100,
@@ -504,7 +504,7 @@ mod private_coverage_tests {
             time_in_force: TimeInForce::Gtd(current_time + 10000), // Expires in future
             extra_fields: TestExtraFields::default(),
         };
-        
+
         // GTD order should not expire if expiry is in future
         assert!(!book.has_expired(&gtd_order));
     }
@@ -514,7 +514,7 @@ mod private_coverage_tests {
         // Test has_expired for GTD order that has expired
         let book = OrderBook::<TestExtraFields>::new("TEST");
         let current_time = current_time_millis();
-        
+
         let gtd_order = OrderType::Standard {
             id: create_order_id(),
             price: 100,
@@ -524,7 +524,7 @@ mod private_coverage_tests {
             time_in_force: TimeInForce::Gtd(current_time - 1000), // Expired
             extra_fields: TestExtraFields::default(),
         };
-        
+
         // GTD order should expire if expiry is in past
         assert!(book.has_expired(&gtd_order));
     }
@@ -533,7 +533,7 @@ mod private_coverage_tests {
     fn test_will_cross_market_no_opposite_side() {
         // Test will_cross_market when there's no opposite side
         let book = OrderBook::<TestExtraFields>::new("TEST");
-        
+
         // No orders on either side - should not cross
         assert!(!book.will_cross_market(100, Side::Buy));
         assert!(!book.will_cross_market(100, Side::Sell));
@@ -543,7 +543,7 @@ mod private_coverage_tests {
     fn test_place_order_in_book_existing_price_level() {
         // Test place_order_in_book when price level already exists
         let book = OrderBook::<TestExtraFields>::new("TEST");
-        
+
         // Add first order
         let order_id1 = create_order_id();
         let order1 = Arc::new(OrderType::Standard {
@@ -555,9 +555,9 @@ mod private_coverage_tests {
             time_in_force: TimeInForce::Gtc,
             extra_fields: TestExtraFields::default(),
         });
-        
+
         let _ = book.place_order_in_book(order1);
-        
+
         // Add second order at same price
         let order_id2 = create_order_id();
         let order2 = Arc::new(OrderType::Standard {
@@ -569,16 +569,16 @@ mod private_coverage_tests {
             time_in_force: TimeInForce::Gtc,
             extra_fields: TestExtraFields::default(),
         });
-        
+
         let result = book.place_order_in_book(order2);
         assert!(result.is_ok());
-        
+
         // Verify both orders were added by checking if we can retrieve them
         let retrieved_order1 = book.get_order(order_id1);
         let retrieved_order2 = book.get_order(order_id2);
         assert!(retrieved_order1.is_some());
         assert!(retrieved_order2.is_some());
-        
+
         // Verify we have orders at this price level
         let orders_at_price = book.get_orders_at_price(100, Side::Buy);
         assert_eq!(orders_at_price.len(), 2);
