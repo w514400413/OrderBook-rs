@@ -3,9 +3,12 @@ use pricelevel::{OrderType, PriceLevel, Side};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-impl OrderBook {
+impl<T> OrderBook<T>
+where
+    T: Clone + Send + Sync + Default + 'static,
+{
     /// Check if an order has expired
-    pub(super) fn has_expired(&self, order: &OrderType) -> bool {
+    pub(super) fn has_expired(&self, order: &OrderType<T>) -> bool {
         let time_in_force = order.time_in_force();
         let current_time = current_time_millis();
 
@@ -22,8 +25,8 @@ impl OrderBook {
     /// Check if there would be a price crossing
     pub(super) fn will_cross_market(&self, price: u64, side: Side) -> bool {
         match side {
-            Side::Buy => self.best_ask().is_some_and(|best_ask| price >= best_ask),
-            Side::Sell => self.best_bid().is_some_and(|best_bid| price <= best_bid),
+            Side::Buy => OrderBook::<T>::best_ask(self).is_some_and(|best_ask| price >= best_ask),
+            Side::Sell => OrderBook::<T>::best_bid(self).is_some_and(|best_bid| price <= best_bid),
         }
     }
 
@@ -31,8 +34,8 @@ impl OrderBook {
     #[allow(dead_code)]
     pub(super) fn place_order_in_book(
         &self,
-        order: Arc<OrderType>,
-    ) -> Result<Arc<OrderType>, OrderBookError> {
+        order: Arc<OrderType<T>>,
+    ) -> Result<Arc<OrderType<T>>, OrderBookError> {
         let (side, price, order_id) = (order.side(), order.price(), order.id());
 
         let book_side = match side {
@@ -47,12 +50,156 @@ impl OrderBook {
             .value()
             .clone();
 
-        // The `add_order` method on PriceLevel expects an `OrderType`, not an `Arc`.
-        price_level.add_order(*order.clone());
+        // Convert OrderType<T> to OrderType<()> for compatibility with current PriceLevel API
+        let unit_order = self.convert_to_unit_type(&*order);
+        let _added_order = price_level.add_order(unit_order);
         // The location is stored as (price, side) for efficient retrieval in cancel_order
         self.order_locations.insert(order_id, (price, side));
 
         Ok(order)
+    }
+
+    /// Convert `OrderType<T>` to OrderType<()> for compatibility with current PriceLevel API
+    pub(crate) fn convert_to_unit_type(&self, order: &OrderType<T>) -> OrderType<()> {
+        match order {
+            OrderType::Standard {
+                id,
+                price,
+                quantity,
+                side,
+                timestamp,
+                time_in_force,
+                ..
+            } => OrderType::Standard {
+                id: *id,
+                price: *price,
+                quantity: *quantity,
+                side: *side,
+                timestamp: *timestamp,
+                time_in_force: *time_in_force,
+                extra_fields: (),
+            },
+            OrderType::IcebergOrder {
+                id,
+                price,
+                visible_quantity,
+                hidden_quantity,
+                side,
+                timestamp,
+                time_in_force,
+                ..
+            } => OrderType::IcebergOrder {
+                id: *id,
+                price: *price,
+                visible_quantity: *visible_quantity,
+                hidden_quantity: *hidden_quantity,
+                side: *side,
+                timestamp: *timestamp,
+                time_in_force: *time_in_force,
+                extra_fields: (),
+            },
+            OrderType::PostOnly {
+                id,
+                price,
+                quantity,
+                side,
+                timestamp,
+                time_in_force,
+                ..
+            } => OrderType::PostOnly {
+                id: *id,
+                price: *price,
+                quantity: *quantity,
+                side: *side,
+                timestamp: *timestamp,
+                time_in_force: *time_in_force,
+                extra_fields: (),
+            },
+            OrderType::TrailingStop {
+                id,
+                price,
+                quantity,
+                side,
+                timestamp,
+                time_in_force,
+                trail_amount,
+                last_reference_price,
+                ..
+            } => OrderType::TrailingStop {
+                id: *id,
+                price: *price,
+                quantity: *quantity,
+                side: *side,
+                timestamp: *timestamp,
+                time_in_force: *time_in_force,
+                trail_amount: *trail_amount,
+                last_reference_price: *last_reference_price,
+                extra_fields: (),
+            },
+            OrderType::PeggedOrder {
+                id,
+                price,
+                quantity,
+                side,
+                timestamp,
+                time_in_force,
+                reference_price_offset,
+                reference_price_type,
+                ..
+            } => OrderType::PeggedOrder {
+                id: *id,
+                price: *price,
+                quantity: *quantity,
+                side: *side,
+                timestamp: *timestamp,
+                time_in_force: *time_in_force,
+                reference_price_offset: *reference_price_offset,
+                reference_price_type: *reference_price_type,
+                extra_fields: (),
+            },
+            OrderType::MarketToLimit {
+                id,
+                price,
+                quantity,
+                side,
+                timestamp,
+                time_in_force,
+                ..
+            } => OrderType::MarketToLimit {
+                id: *id,
+                price: *price,
+                quantity: *quantity,
+                side: *side,
+                timestamp: *timestamp,
+                time_in_force: *time_in_force,
+                extra_fields: (),
+            },
+            OrderType::ReserveOrder {
+                id,
+                price,
+                visible_quantity,
+                hidden_quantity,
+                side,
+                timestamp,
+                time_in_force,
+                replenish_threshold,
+                replenish_amount,
+                auto_replenish,
+                ..
+            } => OrderType::ReserveOrder {
+                id: *id,
+                price: *price,
+                visible_quantity: *visible_quantity,
+                hidden_quantity: *hidden_quantity,
+                side: *side,
+                timestamp: *timestamp,
+                time_in_force: *time_in_force,
+                replenish_threshold: *replenish_threshold,
+                replenish_amount: *replenish_amount,
+                auto_replenish: *auto_replenish,
+                extra_fields: (),
+            },
+        }
     }
 }
 
@@ -72,7 +219,7 @@ mod tests {
 
     #[test]
     fn test_private_place_order_in_book() {
-        let order_book = OrderBook::new("TEST");
+        let order_book: OrderBook<()> = OrderBook::new("TEST");
         let order_id = create_order_id();
         let order = Arc::new(OrderType::Standard {
             id: order_id,
@@ -81,6 +228,7 @@ mod tests {
             side: Side::Buy,
             timestamp: crate::utils::current_time_millis(),
             time_in_force: TimeInForce::Gtc,
+            extra_fields: (),
         });
 
         assert!(order_book.place_order_in_book(order).is_ok());
@@ -97,7 +245,7 @@ mod tests {
 
     #[test]
     fn test_will_cross_market_buy_no_ask() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // No ask orders yet, should not cross
         assert!(!book.will_cross_market(1000, Side::Buy));
@@ -106,7 +254,7 @@ mod tests {
     // This test was missing its function definition
     #[test]
     fn test_has_expired_day_order() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
         let current_time = current_time_millis();
         book.set_market_close_timestamp(current_time - 1000); // Set market close in the past
 
@@ -117,6 +265,7 @@ mod tests {
             side: Side::Buy,
             timestamp: current_time,
             time_in_force: TimeInForce::Day,
+            extra_fields: (),
         };
 
         // Day order should expire if market close is in the past
@@ -125,7 +274,7 @@ mod tests {
 
     #[test]
     fn test_will_cross_market_sell_no_bid() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // No bid orders yet, should not cross
         assert!(!book.will_cross_market(1000, Side::Sell));
@@ -133,11 +282,11 @@ mod tests {
 
     #[test]
     fn test_will_cross_market_buy_with_cross() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Add a sell order at 1000
         let id = create_order_id();
-        let result = book.add_limit_order(id, 1000, 10, Side::Sell, TimeInForce::Gtc);
+        let result = book.add_limit_order(id, 1000, 10, Side::Sell, TimeInForce::Gtc, None);
         assert!(result.is_ok());
 
         // Buy at 1000 should cross
@@ -152,11 +301,11 @@ mod tests {
 
     #[test]
     fn test_will_cross_market_sell_with_cross() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Add a buy order at 1000
         let id = create_order_id();
-        let result = book.add_limit_order(id, 1000, 10, Side::Buy, TimeInForce::Gtc);
+        let result = book.add_limit_order(id, 1000, 10, Side::Buy, TimeInForce::Gtc, None);
         assert!(result.is_ok());
 
         // Sell at 1000 should cross
@@ -171,11 +320,11 @@ mod tests {
 
     #[test]
     fn test_match_market_order_partial_availability() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Add an ask with only 5 units available
         let sell_id = create_order_id();
-        let _ = book.add_limit_order(sell_id, 1000, 5, Side::Sell, TimeInForce::Gtc);
+        let _ = book.add_limit_order(sell_id, 1000, 5, Side::Sell, TimeInForce::Gtc, None);
 
         // Try to execute a buy for 10 units
         let buy_id = create_order_id();
@@ -196,7 +345,7 @@ mod tests {
 
     #[test]
     fn test_match_market_order_no_matches() {
-        let book = OrderBook::new("TEST");
+        let book: OrderBook<()> = OrderBook::new("TEST");
 
         // Attempt to match a market order on an empty book
         let id = create_order_id();
