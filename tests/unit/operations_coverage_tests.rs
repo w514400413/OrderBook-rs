@@ -2,7 +2,6 @@
 //! These tests target specific uncovered lines and edge cases
 
 use pricelevel::{OrderId, OrderType, Side, TimeInForce};
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct TestExtraFields {
@@ -15,7 +14,7 @@ mod tests {
     use orderbook_rs::OrderBook;
 
     fn create_order_id() -> OrderId {
-        OrderId(Uuid::new_v4())
+        OrderId::new_uuid()
     }
 
     #[test]

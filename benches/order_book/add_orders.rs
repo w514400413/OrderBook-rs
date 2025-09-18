@@ -2,7 +2,6 @@ use criterion::{BenchmarkId, Criterion};
 use orderbook_rs::OrderBook;
 use pricelevel::{OrderId, Side, TimeInForce};
 use std::hint::black_box;
-use uuid::Uuid;
 
 /// Register all benchmarks for adding orders to an order book
 pub fn register_benchmarks(c: &mut Criterion) {
@@ -13,7 +12,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
         b.iter(|| {
             let order_book: OrderBook = OrderBook::new("TEST-SYMBOL");
             for i in 0..100 {
-                let id = OrderId(Uuid::new_v4());
+                let id = OrderId::new_uuid();
                 let _ = black_box(order_book.add_limit_order(
                     id,
                     1000 + i,
@@ -31,7 +30,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
         b.iter(|| {
             let order_book: OrderBook = OrderBook::new("TEST-SYMBOL");
             for i in 0..100 {
-                let id = OrderId(Uuid::new_v4());
+                let id = OrderId::new_uuid();
                 let _ = black_box(order_book.add_iceberg_order(
                     id,
                     1000 + i,
@@ -50,7 +49,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
         b.iter(|| {
             let order_book: OrderBook = OrderBook::new("TEST-SYMBOL");
             for i in 0..100 {
-                let id = OrderId(Uuid::new_v4());
+                let id = OrderId::new_uuid();
                 let _ = black_box(order_book.add_post_only_order(
                     id,
                     1000 + i,
@@ -72,7 +71,7 @@ pub fn register_benchmarks(c: &mut Criterion) {
                 b.iter(|| {
                     let order_book: OrderBook = OrderBook::new("TEST-SYMBOL");
                     for _i in 0..order_count {
-                        let id = OrderId(Uuid::new_v4());
+                        let id = OrderId::new_uuid();
                         let _ = black_box(order_book.add_limit_order(
                             id,
                             1000,

@@ -1,10 +1,9 @@
 #[cfg(test)]
 mod tests {
     use pricelevel::{OrderId, OrderType, Side, TimeInForce};
-    use uuid::Uuid;
 
     fn create_sample_order_id() -> OrderId {
-        OrderId(Uuid::new_v4())
+        OrderId::new_uuid()
     }
 
     #[test]

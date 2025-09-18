@@ -65,7 +65,7 @@ fn run_performance_test() {
                         let price_offset = (local_counter % 10) * 10;
                         let price = price_base + price_offset;
 
-                        let id = OrderId(Uuid::new_v4());
+                        let id = OrderId::new_uuid();
                         let _ = thread_book.add_limit_order(
                             id,
                             price,
@@ -84,14 +84,14 @@ fn run_performance_test() {
                         };
                         let quantity = 5 + (local_counter % 5); // 5-9 units
 
-                        let id = OrderId(Uuid::new_v4());
+                        let id = OrderId::new_uuid();
                         let _ = thread_book.submit_market_order(id, quantity, side);
                     }
                     2 => {
                         // This thread cancels orders
                         // Use order IDs that have a chance of existing but will often miss
                         // (this simulates a realistic scenario with many cancellations failing)
-                        let target_id = OrderId(Uuid::new_v4());
+                        let target_id = OrderId::new_uuid();
                         let _ = thread_book.cancel_order(target_id);
                     }
                     3 => {
@@ -194,7 +194,7 @@ fn populate_orderbook(book: &OrderBook, order_count: usize) {
     // Add buy orders
     for i in 0..(order_count / 2) {
         let price = (9900 + (i % 100) * 10) as u64; // 9900-10890
-        let id = OrderId(Uuid::new_v4());
+        let id = OrderId::new_uuid();
         let _ = book.add_limit_order(
             id,
             price,
@@ -208,7 +208,7 @@ fn populate_orderbook(book: &OrderBook, order_count: usize) {
     // Add sell orders
     for i in 0..(order_count / 2) {
         let price = (10100 + (i % 100) * 10) as u64; // 10100-11090
-        let id = OrderId(Uuid::new_v4());
+        let id = OrderId::new_uuid();
         let _ = book.add_limit_order(
             id,
             price,
@@ -226,7 +226,7 @@ fn populate_orderbook(book: &OrderBook, order_count: usize) {
         let price_base = if is_buy { 9950 } else { 10050 };
         let price = price_base + (i * 5);
 
-        let id = OrderId(Uuid::new_v4());
+        let id = OrderId::new_uuid();
         let _ = book.add_iceberg_order(
             id,
             price,

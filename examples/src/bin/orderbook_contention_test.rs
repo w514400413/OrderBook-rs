@@ -135,7 +135,7 @@ fn test_read_write_ratio() -> Result<(), String> {
                         match local_counter % 3 {
                             0 => {
                                 // Add a limit order
-                                let id = OrderId(Uuid::new_v4());
+                                let id = OrderId::new_uuid();
                                 let side = if local_counter % 2 == 0 {
                                     Side::Buy
                                 } else {
@@ -153,7 +153,7 @@ fn test_read_write_ratio() -> Result<(), String> {
                             }
                             1 => {
                                 // Submit a market order
-                                let id = OrderId(Uuid::new_v4());
+                                let id = OrderId::new_uuid();
                                 let side = if local_counter % 2 == 0 {
                                     Side::Buy
                                 } else {
@@ -163,7 +163,7 @@ fn test_read_write_ratio() -> Result<(), String> {
                             }
                             _ => {
                                 // Cancel a random order
-                                let id = OrderId(Uuid::new_v4());
+                                let id = OrderId::new_uuid();
                                 let _ = thread_book.cancel_order(id);
                             }
                         }
@@ -494,7 +494,7 @@ fn test_price_level_distribution() -> Result<(), String> {
                                 10100 + (local_counter % max_level as u64) as u64 * 10
                             };
                             let _ = thread_book.add_limit_order(
-                                OrderId(Uuid::new_v4()),
+                                OrderId::new_uuid(),
                                 price,
                                 10,
                                 side,
@@ -506,8 +506,7 @@ fn test_price_level_distribution() -> Result<(), String> {
                         2 | 3 => {
                             // Submit market buy/sell
                             let side = if op_type == 2 { Side::Buy } else { Side::Sell };
-                            let _ =
-                                thread_book.submit_market_order(OrderId(Uuid::new_v4()), 1, side);
+                            let _ = thread_book.submit_market_order(OrderId::new_uuid(), 1, side);
                             std::thread::yield_now(); // Aggressively yield after write
                         }
                         4 => {

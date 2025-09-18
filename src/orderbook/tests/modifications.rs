@@ -3,11 +3,10 @@ mod test_order_modifications {
     use crate::orderbook::modifications::OrderQuantity;
     use crate::{OrderBook, OrderBookError};
     use pricelevel::{OrderId, OrderType, OrderUpdate, Side, TimeInForce};
-    use uuid::Uuid;
 
     // Helper function to create a unique order ID
     fn create_order_id() -> OrderId {
-        OrderId(Uuid::new_v4())
+        OrderId::new_uuid()
     }
 
     #[test]
@@ -221,10 +220,9 @@ mod test_modifications_remaining {
     use crate::OrderBook;
 
     use pricelevel::{OrderId, OrderType, OrderUpdate, PegReferenceType, Side, TimeInForce};
-    use uuid::Uuid;
 
     fn create_order_id() -> OrderId {
-        OrderId(Uuid::new_v4())
+        OrderId::new_uuid()
     }
 
     #[test]
@@ -456,10 +454,9 @@ mod test_modifications_remaining {
 mod test_modifications_specific {
     use crate::{OrderBook, OrderBookError};
     use pricelevel::{OrderId, OrderType, OrderUpdate, PegReferenceType, Side, TimeInForce};
-    use uuid::Uuid;
 
     fn create_order_id() -> OrderId {
-        OrderId(Uuid::new_v4())
+        OrderId::new_uuid()
     }
 
     #[test]

@@ -440,5 +440,5 @@ fn display_orderbook_state(book: &crate::OrderBook) {
 }
 
 fn new_order_id() -> OrderId {
-    OrderId(Uuid::new_v4())
+    OrderId::new_uuid()
 }

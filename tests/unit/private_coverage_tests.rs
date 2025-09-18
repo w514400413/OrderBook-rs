@@ -3,7 +3,6 @@
 
 use pricelevel::{OrderId, OrderType, PegReferenceType, Side, TimeInForce};
 use std::sync::Arc;
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct TestExtraFields {
@@ -17,7 +16,7 @@ mod tests {
     use orderbook_rs::{OrderBook, current_time_millis};
 
     fn create_order_id() -> OrderId {
-        OrderId(Uuid::new_v4())
+        OrderId::new_uuid()
     }
 
     #[test]

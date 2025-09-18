@@ -210,11 +210,10 @@ mod tests {
     use crate::utils::current_time_millis; // Import the time utility
     use pricelevel::{OrderId, OrderType, Side, TimeInForce};
     use std::sync::Arc;
-    use uuid::Uuid;
 
     // Helper function to create a unique order ID
     fn create_order_id() -> OrderId {
-        OrderId(Uuid::new_v4())
+        OrderId::new_uuid()
     }
 
     #[test]
@@ -226,7 +225,7 @@ mod tests {
             price: 100,
             quantity: 10,
             side: Side::Buy,
-            timestamp: crate::utils::current_time_millis(),
+            timestamp: current_time_millis(),
             time_in_force: TimeInForce::Gtc,
             extra_fields: (),
         });

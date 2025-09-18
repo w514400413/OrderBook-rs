@@ -2,11 +2,10 @@
 mod tests {
     use crate::{OrderBook, OrderBookError};
     use pricelevel::{OrderId, Side, TimeInForce};
-    use uuid::Uuid;
 
     // Helper function to create a random OrderId
     fn new_order_id() -> OrderId {
-        OrderId(Uuid::new_v4())
+        OrderId::new_uuid()
     }
 
     // Helper function to create an order book for testing
@@ -464,7 +463,6 @@ mod test_extra_fields {
     use crate::OrderBook;
     use pricelevel::{OrderId, Side, TimeInForce};
     use serde::{Deserialize, Serialize};
-    use uuid::Uuid;
 
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
     struct OrderMetadata {
@@ -474,7 +472,7 @@ mod test_extra_fields {
     }
 
     fn create_order_id() -> OrderId {
-        OrderId(Uuid::new_v4())
+        OrderId::new_uuid()
     }
 
     fn create_test_metadata() -> OrderMetadata {
@@ -654,10 +652,9 @@ mod test_extra_fields {
 mod test_operations_remaining {
     use crate::OrderBook;
     use pricelevel::{OrderId, Side, TimeInForce};
-    use uuid::Uuid;
 
     fn create_order_id() -> OrderId {
-        OrderId(Uuid::new_v4())
+        OrderId::new_uuid()
     }
 
     #[test]
@@ -739,12 +736,11 @@ mod test_operations_remaining {
 mod test_operations_specific {
     use crate::OrderBook;
     use pricelevel::{OrderId, Side, TimeInForce};
-    use uuid::Uuid;
 
     use tracing::trace;
 
     fn create_order_id() -> OrderId {
-        OrderId(Uuid::new_v4())
+        OrderId::new_uuid()
     }
 
     #[test]
