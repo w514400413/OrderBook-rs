@@ -7,6 +7,7 @@ use crate::utils::current_time_millis;
 use dashmap::DashMap;
 use pricelevel::{MatchResult, OrderId, OrderType, PriceLevel, Side, UuidGenerator};
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tracing::trace;
@@ -14,7 +15,7 @@ use uuid::Uuid;
 
 /// The OrderBook manages a collection of price levels for both bid and ask sides.
 /// It supports adding, cancelling, and matching orders with lock-free operations where possible.
-pub struct OrderBook {
+pub struct OrderBook<T = ()> {
     /// The symbol or identifier for this order book
     pub(super) symbol: String,
 
@@ -50,12 +51,163 @@ pub struct OrderBook {
 
     /// listens to possible trades when an order is added
     pub trade_listener: Option<TradeListener>,
+
+    /// Phantom data to maintain generic type parameter
+    _phantom: PhantomData<T>,
 }
 
 /// trade listener specification
 pub type TradeListener = fn(&MatchResult);
 
-impl OrderBook {
+impl<T> OrderBook<T>
+where
+    T: Default + Clone + Send + Sync + 'static,
+{
+    /// Convert OrderType<()> to `OrderType<T>` for return values
+    pub(crate) fn convert_from_unit_type(&self, order: &OrderType<()>) -> OrderType<T>
+    where
+        T: Default,
+    {
+        match order {
+            OrderType::Standard {
+                id,
+                price,
+                quantity,
+                side,
+                timestamp,
+                time_in_force,
+                ..
+            } => OrderType::Standard {
+                id: *id,
+                price: *price,
+                quantity: *quantity,
+                side: *side,
+                timestamp: *timestamp,
+                time_in_force: *time_in_force,
+                extra_fields: T::default(),
+            },
+            OrderType::IcebergOrder {
+                id,
+                price,
+                visible_quantity,
+                hidden_quantity,
+                side,
+                timestamp,
+                time_in_force,
+                ..
+            } => OrderType::IcebergOrder {
+                id: *id,
+                price: *price,
+                visible_quantity: *visible_quantity,
+                hidden_quantity: *hidden_quantity,
+                side: *side,
+                timestamp: *timestamp,
+                time_in_force: *time_in_force,
+                extra_fields: T::default(),
+            },
+            OrderType::PostOnly {
+                id,
+                price,
+                quantity,
+                side,
+                timestamp,
+                time_in_force,
+                ..
+            } => OrderType::PostOnly {
+                id: *id,
+                price: *price,
+                quantity: *quantity,
+                side: *side,
+                timestamp: *timestamp,
+                time_in_force: *time_in_force,
+                extra_fields: T::default(),
+            },
+            OrderType::TrailingStop {
+                id,
+                price,
+                quantity,
+                side,
+                timestamp,
+                time_in_force,
+                trail_amount,
+                last_reference_price,
+                ..
+            } => OrderType::TrailingStop {
+                id: *id,
+                price: *price,
+                quantity: *quantity,
+                side: *side,
+                timestamp: *timestamp,
+                time_in_force: *time_in_force,
+                trail_amount: *trail_amount,
+                last_reference_price: *last_reference_price,
+                extra_fields: T::default(),
+            },
+            OrderType::PeggedOrder {
+                id,
+                price,
+                quantity,
+                side,
+                timestamp,
+                time_in_force,
+                reference_price_offset,
+                reference_price_type,
+                ..
+            } => OrderType::PeggedOrder {
+                id: *id,
+                price: *price,
+                quantity: *quantity,
+                side: *side,
+                timestamp: *timestamp,
+                time_in_force: *time_in_force,
+                reference_price_offset: *reference_price_offset,
+                reference_price_type: *reference_price_type,
+                extra_fields: T::default(),
+            },
+            OrderType::MarketToLimit {
+                id,
+                price,
+                quantity,
+                side,
+                timestamp,
+                time_in_force,
+                ..
+            } => OrderType::MarketToLimit {
+                id: *id,
+                price: *price,
+                quantity: *quantity,
+                side: *side,
+                timestamp: *timestamp,
+                time_in_force: *time_in_force,
+                extra_fields: T::default(),
+            },
+            OrderType::ReserveOrder {
+                id,
+                price,
+                visible_quantity,
+                hidden_quantity,
+                side,
+                timestamp,
+                time_in_force,
+                replenish_threshold,
+                replenish_amount,
+                auto_replenish,
+                ..
+            } => OrderType::ReserveOrder {
+                id: *id,
+                price: *price,
+                visible_quantity: *visible_quantity,
+                hidden_quantity: *hidden_quantity,
+                side: *side,
+                timestamp: *timestamp,
+                time_in_force: *time_in_force,
+                replenish_threshold: *replenish_threshold,
+                replenish_amount: *replenish_amount,
+                auto_replenish: *auto_replenish,
+                extra_fields: T::default(),
+            },
+        }
+    }
     /// Create a new order book for the given symbol
     pub fn new(symbol: &str) -> Self {
         // Create a unique namespace for this order book's transaction IDs
@@ -73,6 +225,7 @@ impl OrderBook {
             has_market_close: AtomicBool::new(false),
             cache: PriceLevelCache::new(),
             trade_listener: None,
+            _phantom: PhantomData,
         }
     }
 
@@ -92,6 +245,7 @@ impl OrderBook {
             has_market_close: AtomicBool::new(false),
             cache: PriceLevelCache::new(),
             trade_listener: Some(trade_listener),
+            _phantom: PhantomData,
         }
     }
 
@@ -144,7 +298,10 @@ impl OrderBook {
 
     /// Get the mid price (average of best bid and best ask)
     pub fn mid_price(&self) -> Option<f64> {
-        match (self.best_bid(), self.best_ask()) {
+        match (
+            OrderBook::<T>::best_bid(self),
+            OrderBook::<T>::best_ask(self),
+        ) {
             (Some(bid), Some(ask)) => Some((bid as f64 + ask as f64) / 2.0),
             _ => None,
         }
@@ -161,14 +318,20 @@ impl OrderBook {
 
     /// Get the spread (best ask - best bid)
     pub fn spread(&self) -> Option<u64> {
-        match (self.best_bid(), self.best_ask()) {
+        match (
+            OrderBook::<T>::best_bid(self),
+            OrderBook::<T>::best_ask(self),
+        ) {
             (Some(bid), Some(ask)) => Some(ask.saturating_sub(bid)),
             _ => None,
         }
     }
 
     /// Get all orders at a specific price level
-    pub fn get_orders_at_price(&self, price: u64, side: Side) -> Vec<Arc<OrderType>> {
+    pub fn get_orders_at_price(&self, price: u64, side: Side) -> Vec<Arc<OrderType<T>>>
+    where
+        T: Default,
+    {
         trace!(
             "Order book {}: Getting orders at price {} for side {:?}",
             self.symbol, price, side
@@ -179,34 +342,54 @@ impl OrderBook {
         };
 
         if let Some(price_level) = price_levels.get(&price) {
-            price_level.iter_orders()
+            price_level
+                .iter_orders()
+                .into_iter()
+                .map(|order| Arc::new(self.convert_from_unit_type(&order)))
+                .collect()
         } else {
             Vec::new()
         }
     }
 
     /// Get all orders in the book
-    pub fn get_all_orders(&self) -> Vec<Arc<OrderType>> {
+    pub fn get_all_orders(&self) -> Vec<Arc<OrderType<T>>>
+    where
+        T: Default,
+    {
         trace!("Order book {}: Getting all orders", self.symbol);
         let mut result = Vec::new();
 
         // Get all bid orders
         for item in self.bids.iter() {
             let price_level = item.value();
-            result.extend(price_level.iter_orders());
+            let converted_orders: Vec<Arc<OrderType<T>>> = price_level
+                .iter_orders()
+                .into_iter()
+                .map(|order| Arc::new(self.convert_from_unit_type(&order)))
+                .collect();
+            result.extend(converted_orders);
         }
 
         // Get all ask orders
         for item in self.asks.iter() {
             let price_level = item.value();
-            result.extend(price_level.iter_orders());
+            let converted_orders: Vec<Arc<OrderType<T>>> = price_level
+                .iter_orders()
+                .into_iter()
+                .map(|order| Arc::new(self.convert_from_unit_type(&order)))
+                .collect();
+            result.extend(converted_orders);
         }
 
         result
     }
 
     /// Get an order by its ID
-    pub fn get_order(&self, order_id: OrderId) -> Option<Arc<OrderType>> {
+    pub fn get_order(&self, order_id: OrderId) -> Option<Arc<OrderType<T>>>
+    where
+        T: Default,
+    {
         // Get the order location without locking
         if let Some(location) = self.order_locations.get(&order_id) {
             let (price, side) = *location;
@@ -221,7 +404,7 @@ impl OrderBook {
                 // Iterate through the orders at this level to find the one with the matching ID
                 for order in price_level.iter_orders() {
                     if order.id() == order_id {
-                        return Some(order.clone());
+                        return Some(Arc::new(self.convert_from_unit_type(&order)));
                     }
                 }
             }
@@ -241,7 +424,7 @@ impl OrderBook {
             "Order book {}: Matching market order {} for {} at side {:?}",
             self.symbol, order_id, quantity, side
         );
-        self.match_order(order_id, side, quantity, None)
+        OrderBook::<T>::match_order(self, order_id, side, quantity, None)
     }
 
     /// Attempts to match a limit order in the order book.
@@ -286,7 +469,7 @@ impl OrderBook {
             "Order book {}: Matching limit order {} for {} at side {:?} with limit price {}",
             self.symbol, order_id, quantity, side, limit_price
         );
-        self.match_order(order_id, side, quantity, Some(limit_price))
+        OrderBook::<T>::match_order(self, order_id, side, quantity, Some(limit_price))
     }
 
     /// Create a snapshot of the current order book state
